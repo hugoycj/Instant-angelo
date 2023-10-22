@@ -1,4 +1,5 @@
-# Instant-angelo
+# Instant-angelo: Build high-fidelity Digital Twin within 20 Minutes!
+![](assets/demo.gif)
 ## Introduction
 Neuralangelo facilitates high-fidelity 3D surface reconstruction from RGB video captures. It enables the creation of digital replicas of both small-scale objects and large real-world scenes, derived from common mobile devices. These digital replicas, or 'twins', are represented with an exceptional level of three-dimensional geo-detail.
 
