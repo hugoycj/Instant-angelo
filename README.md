@@ -4,7 +4,9 @@ Neuralangelo facilitates high-fidelity 3D surface reconstruction from RGB video 
 
 Nevertheless, substantial room for improvement exists. At present, the official and reimplemented Neuralangelo implementation requires 40 hours and 40 GB on an A100 for real world scene reconstructions. An expedited variant in instant-nsr has been developed, but the results have been subpar due to parameter limitations.
 
-To fill this gap in high-speed, high-fidelity reconstruction, our objective is to engineer an advanced iteration of Neuralangelo. This refined model will focus on high-fidelity neural surface reconstruction, streamlining the process to achieve results within an unprecedented 20 minute timeline while maintaining the highest standard of quality.
+To fill this gap in high-speed, high-fidelity reconstruction, our objective is to engineer an advanced iteration of Neuralangelo. This refined model will focus on high-fidelity neural surface reconstruction, streamlining the process to achieve results within an unprecedented 20 minute timeline while maintaining the highest standard of quality. 
+
+We provide [Quick Lookup](https://github.com/hugoycj/Instant-angelo_vis) examples of project outcomes. These examples can serve as a reference to help determine if this project is suitable for your use case scenario.
 
 ## Installation
 ```
