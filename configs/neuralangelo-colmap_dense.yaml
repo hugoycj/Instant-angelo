@@ -1,4 +1,4 @@
-name: neuralangelo-colmap_plus_dense_sdf_loss_plus_curvationV2_plus_dual_color-${basename:${dataset.root_dir}}
+name: neuralangelo-colmap_plus_dense-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
