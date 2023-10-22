@@ -62,10 +62,25 @@ Information you need to know before you start:
 ---
 Now it is time to start by running:
 ```
-run_neuralangelo-colmap_sparse-50k.sh  $YOUR_DATA_DIR
+bash run_neuralangelo-colmap_sparse-50k.sh  $YOUR_DATA_DIR
 ```
 
 ### Run Detail Reconstruction Mode with MVS prior
+---
+Generating high-fidelity surface reconstructions with only RGB inputs in 20,000 steps (around 20 minutes) is challenging, especially for sparse in-the-wild captures where occlusion and limited views make surface reconstruction an underconstrained problem. This can lead to optimization instability and difficulty converging. Introducing lidar, ToF depth, or predicted depth can help stabilize optimization and accelerate training. However, directly regularizing rendered depth is suboptimal due to bias introduced by density2sdf. Moreover, ensuring consistent depth across views is difficult, especially with lower-quality ToF sensors or predicted depth. We propose directly regularizing the SDF field using MVS point clouds and normals to alleviate density
+
+However, generating dense point clouds with traditional MVS methods like COLMAP is too slow. We instead utilize MVSNet to predict dense point clouds more efficiently. Currently, we use the official Vis-MVSNet implementation to provide the dense point cloud prior. Preprocessing takes around 10 minutes for 300 frames, so there is still ample room to improve efficiency by replacing Vis-MVSNet with state-of-the-art methods like MVSFormer or SimpleRecon. Moreover, preprocessing time could be substantially reduced by leveraging quantization and TensorRT. Overall, MVSNet allows generating the necessary point cloud prior an order of magnitude faster than traditional MVS approaches. We found that using MVS point cloud priors accelerates convergence by 2-3x compared to just sparse point clouds. Moreover, for large-scale scenes like buildings or city blocks, the MVS prior is necessary for high fidelity reconstruction. Although dense point clouds can contain noise, we mitigate this via curvature regularization and a decreasing loss schedule that removes reliance on the dense prior later in optimization. Overall, the dense MVS point cloud provides a crucial initialization that bootstraps the optimization and enables reconstructing complex real-world environments.
+
+Importantly, in real-world scenarios like oblique photography and virtual tours, dense point clouds are already intermediate outputs. This allows directly utilizing the existing point clouds for regularization without extra computation. In such use cases, the point cloud prior comes for free as part of the capture process. 
+---
+Information you need to know before you start:
+* An aligned dense point cloud with normal is necessary, you could specify the relative path at `dataset.dense_pcd_path` in the config file
+* The point cloud could be generated from various methods, either from traditional MVS like colmap or OpenMVS, or learning-based MVS method. You could even generate the point cloud using commercial photogrammetry software like metashape and DJI. 
+---
+Now it is time to start by running:
+```
+bash run_neuralangelo-colmap_dense.sh  $YOUR_DATA_DIR
+```
 
 ## Frequently asked questions (FAQ)
 1. **Q:** CUDA out of memory. 
