@@ -1,19 +1,41 @@
-"""
-Copyright 2019, Jingyang Zhang and Yao Yao, HKUST. Model reading is provided by COLMAP.
-Preprocess script.
-"""
+# Copyright (c) 2018, ETH Zurich and UNC Chapel Hill.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#
+#     * Redistributions in binary form must reproduce the above copyright
+#       notice, this list of conditions and the following disclaimer in the
+#       documentation and/or other materials provided with the distribution.
+#
+#     * Neither the name of ETH Zurich and UNC Chapel Hill nor the names of
+#       its contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Author: Johannes L. Schoenberger (jsch-at-demuc-dot-de)
 
-import collections
-import struct
-import numpy as np
-import multiprocessing as mp
 import os
+import collections
+import numpy as np
+import struct
 import argparse
-import shutil
-import cv2
 
 
-#============================ read_model.py ============================#
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
 Camera = collections.namedtuple(
@@ -22,6 +44,7 @@ BaseImage = collections.namedtuple(
     "Image", ["id", "qvec", "tvec", "camera_id", "name", "xys", "point3D_ids"])
 Point3D = collections.namedtuple(
     "Point3D", ["id", "xyz", "rgb", "error", "image_ids", "point2D_idxs"])
+
 
 class Image(BaseImage):
     def qvec2rotmat(self):
@@ -41,8 +64,10 @@ CAMERA_MODELS = {
     CameraModel(model_id=9, model_name="RADIAL_FISHEYE", num_params=5),
     CameraModel(model_id=10, model_name="THIN_PRISM_FISHEYE", num_params=12)
 }
-CAMERA_MODEL_IDS = dict([(camera_model.model_id, camera_model) \
+CAMERA_MODEL_IDS = dict([(camera_model.model_id, camera_model)
                          for camera_model in CAMERA_MODELS])
+CAMERA_MODEL_NAMES = dict([(camera_model.model_name, camera_model)
+                           for camera_model in CAMERA_MODELS])
 
 
 def read_next_bytes(fid, num_bytes, format_char_sequence, endian_character="<"):
@@ -55,6 +80,22 @@ def read_next_bytes(fid, num_bytes, format_char_sequence, endian_character="<"):
     """
     data = fid.read(num_bytes)
     return struct.unpack(endian_character + format_char_sequence, data)
+
+
+def write_next_bytes(fid, data, format_char_sequence, endian_character="<"):
+    """pack and write to a binary file.
+    :param fid:
+    :param data: data to send, if multiple elements are sent at the same time,
+    they should be encapsuled either in a list or a tuple
+    :param format_char_sequence: List of {c, e, f, d, h, H, i, I, l, L, q, Q}.
+    should be the same length as the data list or tuple
+    :param endian_character: Any of {@, =, <, >, !}
+    """
+    if isinstance(data, (list, tuple)):
+        bytes = struct.pack(endian_character + format_char_sequence, *data)
+    else:
+        bytes = struct.pack(endian_character + format_char_sequence, data)
+    fid.write(bytes)
 
 
 def read_cameras_text(path):
@@ -92,7 +133,7 @@ def read_cameras_binary(path_to_model_file):
     cameras = {}
     with open(path_to_model_file, "rb") as fid:
         num_cameras = read_next_bytes(fid, 8, "Q")[0]
-        for camera_line_index in range(num_cameras):
+        for _ in range(num_cameras):
             camera_properties = read_next_bytes(
                 fid, num_bytes=24, format_char_sequence="iiQQ")
             camera_id = camera_properties[0]
@@ -109,6 +150,43 @@ def read_cameras_binary(path_to_model_file):
                                         height=height,
                                         params=np.array(params))
         assert len(cameras) == num_cameras
+    return cameras
+
+
+def write_cameras_text(cameras, path):
+    """
+    see: src/base/reconstruction.cc
+        void Reconstruction::WriteCamerasText(const std::string& path)
+        void Reconstruction::ReadCamerasText(const std::string& path)
+    """
+    HEADER = "# Camera list with one line of data per camera:\n" + \
+             "#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n" + \
+             "# Number of cameras: {}\n".format(len(cameras))
+    with open(path, "w") as fid:
+        fid.write(HEADER)
+        for _, cam in cameras.items():
+            to_write = [cam.id, cam.model, cam.width, cam.height, *cam.params]
+            line = " ".join([str(elem) for elem in to_write])
+            fid.write(line + "\n")
+
+
+def write_cameras_binary(cameras, path_to_model_file):
+    """
+    see: src/base/reconstruction.cc
+        void Reconstruction::WriteCamerasBinary(const std::string& path)
+        void Reconstruction::ReadCamerasBinary(const std::string& path)
+    """
+    with open(path_to_model_file, "wb") as fid:
+        write_next_bytes(fid, len(cameras), "Q")
+        for _, cam in cameras.items():
+            model_id = CAMERA_MODEL_NAMES[cam.model].model_id
+            camera_properties = [cam.id,
+                                 model_id,
+                                 cam.width,
+                                 cam.height]
+            write_next_bytes(fid, camera_properties, "iiQQ")
+            for p in cam.params:
+                write_next_bytes(fid, float(p), "d")
     return cameras
 
 
@@ -152,7 +230,7 @@ def read_images_binary(path_to_model_file):
     images = {}
     with open(path_to_model_file, "rb") as fid:
         num_reg_images = read_next_bytes(fid, 8, "Q")[0]
-        for image_index in range(num_reg_images):
+        for _ in range(num_reg_images):
             binary_image_properties = read_next_bytes(
                 fid, num_bytes=64, format_char_sequence="idddddddi")
             image_id = binary_image_properties[0]
@@ -176,6 +254,55 @@ def read_images_binary(path_to_model_file):
                 camera_id=camera_id, name=image_name,
                 xys=xys, point3D_ids=point3D_ids)
     return images
+
+
+def write_images_text(images, path):
+    """
+    see: src/base/reconstruction.cc
+        void Reconstruction::ReadImagesText(const std::string& path)
+        void Reconstruction::WriteImagesText(const std::string& path)
+    """
+    if len(images) == 0:
+        mean_observations = 0
+    else:
+        mean_observations = sum((len(img.point3D_ids) for _, img in images.items()))/len(images)
+    HEADER = "# Image list with two lines of data per image:\n" + \
+             "#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n" + \
+             "#   POINTS2D[] as (X, Y, POINT3D_ID)\n" + \
+             "# Number of images: {}, mean observations per image: {}\n".format(len(images), mean_observations)
+
+    with open(path, "w") as fid:
+        fid.write(HEADER)
+        for _, img in images.items():
+            image_header = [img.id, *img.qvec, *img.tvec, img.camera_id, img.name]
+            first_line = " ".join(map(str, image_header))
+            fid.write(first_line + "\n")
+
+            points_strings = []
+            for xy, point3D_id in zip(img.xys, img.point3D_ids):
+                points_strings.append(" ".join(map(str, [*xy, point3D_id])))
+            fid.write(" ".join(points_strings) + "\n")
+
+
+def write_images_binary(images, path_to_model_file):
+    """
+    see: src/base/reconstruction.cc
+        void Reconstruction::ReadImagesBinary(const std::string& path)
+        void Reconstruction::WriteImagesBinary(const std::string& path)
+    """
+    with open(path_to_model_file, "wb") as fid:
+        write_next_bytes(fid, len(images), "Q")
+        for _, img in images.items():
+            write_next_bytes(fid, img.id, "i")
+            write_next_bytes(fid, img.qvec.tolist(), "dddd")
+            write_next_bytes(fid, img.tvec.tolist(), "ddd")
+            write_next_bytes(fid, img.camera_id, "i")
+            for char in img.name:
+                write_next_bytes(fid, char.encode("utf-8"), "c")
+            write_next_bytes(fid, b"\x00", "c")
+            write_next_bytes(fid, len(img.point3D_ids), "Q")
+            for xy, p3d_id in zip(img.xys, img.point3D_ids):
+                write_next_bytes(fid, [*xy, p3d_id], "ddq")
 
 
 def read_points3D_text(path):
@@ -205,7 +332,7 @@ def read_points3D_text(path):
     return points3D
 
 
-def read_points3d_binary(path_to_model_file):
+def read_points3D_binary(path_to_model_file):
     """
     see: src/base/reconstruction.cc
         void Reconstruction::ReadPoints3DBinary(const std::string& path)
@@ -214,7 +341,7 @@ def read_points3d_binary(path_to_model_file):
     points3D = {}
     with open(path_to_model_file, "rb") as fid:
         num_points = read_next_bytes(fid, 8, "Q")[0]
-        for point_line_index in range(num_points):
+        for _ in range(num_points):
             binary_point_line_properties = read_next_bytes(
                 fid, num_bytes=43, format_char_sequence="QdddBBBd")
             point3D_id = binary_point_line_properties[0]
@@ -235,7 +362,71 @@ def read_points3d_binary(path_to_model_file):
     return points3D
 
 
-def read_model(path, ext):
+def write_points3D_text(points3D, path):
+    """
+    see: src/base/reconstruction.cc
+        void Reconstruction::ReadPoints3DText(const std::string& path)
+        void Reconstruction::WritePoints3DText(const std::string& path)
+    """
+    if len(points3D) == 0:
+        mean_track_length = 0
+    else:
+        mean_track_length = sum((len(pt.image_ids) for _, pt in points3D.items()))/len(points3D)
+    HEADER = "# 3D point list with one line of data per point:\n" + \
+             "#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n" + \
+             "# Number of points: {}, mean track length: {}\n".format(len(points3D), mean_track_length)
+
+    with open(path, "w") as fid:
+        fid.write(HEADER)
+        for _, pt in points3D.items():
+            point_header = [pt.id, *pt.xyz, *pt.rgb, pt.error]
+            fid.write(" ".join(map(str, point_header)) + " ")
+            track_strings = []
+            for image_id, point2D in zip(pt.image_ids, pt.point2D_idxs):
+                track_strings.append(" ".join(map(str, [image_id, point2D])))
+            fid.write(" ".join(track_strings) + "\n")
+
+
+def write_points3D_binary(points3D, path_to_model_file):
+    """
+    see: src/base/reconstruction.cc
+        void Reconstruction::ReadPoints3DBinary(const std::string& path)
+        void Reconstruction::WritePoints3DBinary(const std::string& path)
+    """
+    with open(path_to_model_file, "wb") as fid:
+        write_next_bytes(fid, len(points3D), "Q")
+        for _, pt in points3D.items():
+            write_next_bytes(fid, pt.id, "Q")
+            write_next_bytes(fid, pt.xyz.tolist(), "ddd")
+            write_next_bytes(fid, pt.rgb.tolist(), "BBB")
+            write_next_bytes(fid, pt.error, "d")
+            track_length = pt.image_ids.shape[0]
+            write_next_bytes(fid, track_length, "Q")
+            for image_id, point2D_id in zip(pt.image_ids, pt.point2D_idxs):
+                write_next_bytes(fid, [image_id, point2D_id], "ii")
+
+
+def detect_model_format(path, ext):
+    if os.path.isfile(os.path.join(path, "cameras"  + ext)) and \
+       os.path.isfile(os.path.join(path, "images"   + ext)) and \
+       os.path.isfile(os.path.join(path, "points3D" + ext)):
+        print("Detected model format: '" + ext + "'")
+        return True
+
+    return False
+
+
+def read_model(path, ext=""):
+    # try to detect the extension automatically
+    if ext == "":
+        if detect_model_format(path, ".bin"):
+            ext = ".bin"
+        elif detect_model_format(path, ".txt"):
+            ext = ".txt"
+        else:
+            print("Provide model format: '.bin' or '.txt'")
+            return
+
     if ext == ".txt":
         cameras = read_cameras_text(os.path.join(path, "cameras" + ext))
         images = read_images_text(os.path.join(path, "images" + ext))
@@ -243,7 +434,19 @@ def read_model(path, ext):
     else:
         cameras = read_cameras_binary(os.path.join(path, "cameras" + ext))
         images = read_images_binary(os.path.join(path, "images" + ext))
-        points3D = read_points3d_binary(os.path.join(path, "points3D") + ext)
+        points3D = read_points3D_binary(os.path.join(path, "points3D") + ext)
+    return cameras, images, points3D
+
+
+def write_model(cameras, images, points3D, path, ext=".bin"):
+    if ext == ".txt":
+        write_cameras_text(cameras, os.path.join(path, "cameras" + ext))
+        write_images_text(images, os.path.join(path, "images" + ext))
+        write_points3D_text(points3D, os.path.join(path, "points3D") + ext)
+    else:
+        write_cameras_binary(cameras, os.path.join(path, "cameras" + ext))
+        write_images_binary(images, os.path.join(path, "images" + ext))
+        write_points3D_binary(points3D, os.path.join(path, "points3D") + ext)
     return cameras, images, points3D
 
 
@@ -272,168 +475,28 @@ def rotmat2qvec(R):
     if qvec[0] < 0:
         qvec *= -1
     return qvec
-#============================ read_model.py ============================#
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert colmap camera')
-
-    parser.add_argument('--dense_folder', type=str, help='Project dir.')
-
-    parser.add_argument('--max_d', type=int, default=256)
-    parser.add_argument('--interval_scale', type=float, default=1)
-
-    parser.add_argument('--theta0', type=float, default=5)
-    parser.add_argument('--sigma1', type=float, default=1)
-    parser.add_argument('--sigma2', type=float, default=10)
-
-    parser.add_argument('--test', action='store_true', default=False, help='If set, do not write to file.')
-    parser.add_argument('--convert_format', action='store_true', default=False, help='If set, convert image to jpg format.')
-
+def main():
+    parser = argparse.ArgumentParser(description="Read and write COLMAP binary and text models")
+    parser.add_argument("--input_model", help="path to input model folder")
+    parser.add_argument("--input_format", choices=[".bin", ".txt"],
+                        help="input model format", default="")
+    parser.add_argument("--output_model",
+                        help="path to output model folder")
+    parser.add_argument("--output_format", choices=[".bin", ".txt"],
+                        help="outut model format", default=".txt")
     args = parser.parse_args()
 
-    image_dir = os.path.join(args.dense_folder, 'images')
-    model_dir = os.path.join(args.dense_folder, 'sparse')
-    cam_dir = os.path.join(args.dense_folder, 'dense', 'cams')
-    renamed_dir = os.path.join(args.dense_folder, 'dense', 'images')
+    cameras, images, points3D = read_model(path=args.input_model, ext=args.input_format)
 
-    cameras, images, points3d = read_model(model_dir, '.txt')
-    num_images = len(list(images.items()))
+    print("num_cameras:", len(cameras))
+    print("num_images:", len(images))
+    print("num_points3D:", len(points3D))
 
-    if os.path.exists(os.path.join(args.dense_folder, 'dense', 'pair.txt')):
-        print('Image pair ' + os.path.join(args.dense_folder, 'dense', 'pair.txt') + ' exist.  Aborting')
-        exit()
-    
-    param_type = {
-        'SIMPLE_PINHOLE': ['f', 'cx', 'cy'],
-        'PINHOLE': ['fx', 'fy', 'cx', 'cy'],
-        'SIMPLE_RADIAL': ['f', 'cx', 'cy', 'k'],
-        'SIMPLE_RADIAL_FISHEYE': ['f', 'cx', 'cy', 'k'],
-        'RADIAL': ['f', 'cx', 'cy', 'k1', 'k2'],
-        'RADIAL_FISHEYE': ['f', 'cx', 'cy', 'k1', 'k2'],
-        'OPENCV': ['fx', 'fy', 'cx', 'cy', 'k1', 'k2', 'p1', 'p2'],
-        'OPENCV_FISHEYE': ['fx', 'fy', 'cx', 'cy', 'k1', 'k2', 'k3', 'k4'],
-        'FULL_OPENCV': ['fx', 'fy', 'cx', 'cy', 'k1', 'k2', 'p1', 'p2', 'k3', 'k4', 'k5', 'k6'],
-        'FOV': ['fx', 'fy', 'cx', 'cy', 'omega'],
-        'THIN_PRISM_FISHEYE': ['fx', 'fy', 'cx', 'cy', 'k1', 'k2', 'p1', 'p2', 'k3', 'k4', 'sx1', 'sy1']
-    }
+    if args.output_model is not None:
+        write_model(cameras, images, points3D, path=args.output_model, ext=args.output_format)
 
-    # intrinsic
-    intrinsic = {}
-    for camera_id, cam in cameras.items():
-        params_dict = {key: value for key, value in zip(param_type[cam.model], cam.params)}
-        if 'f' in param_type[cam.model]:
-            params_dict['fx'] = params_dict['f']
-            params_dict['fy'] = params_dict['f']
-        i = np.array([
-            [params_dict['fx'], 0, params_dict['cx']],
-            [0, params_dict['fy'], params_dict['cy']],
-            [0, 0, 1]
-        ])
-        intrinsic[camera_id] = i
-    # print('intrinsic[1]\n', intrinsic[1], end='\n\n')
 
-    # extrinsic
-    extrinsic = {}
-    for image_id, image in images.items():
-        e = np.zeros((4, 4))
-        e[:3, :3] = qvec2rotmat(image.qvec)
-        e[:3, 3] = image.tvec
-        e[3, 3] = 1
-        extrinsic[image_id] = e
-    # print('extrinsic[1]\n', extrinsic[1], end='\n\n')
-
-    # depth range and interval
-    depth_ranges = {}
-    for i in range(num_images):
-        zs = []
-        for p3d_id in images[i+1].point3D_ids:
-            if p3d_id == -1:
-                continue
-            transformed = np.matmul(extrinsic[i+1], [points3d[p3d_id].xyz[0], points3d[p3d_id].xyz[1], points3d[p3d_id].xyz[2], 1])
-            zs.append(np.asscalar(transformed[2]))
-        zs_sorted = sorted(zs)
-        # relaxed depth range
-        if len(zs) > 0:
-            depth_min = zs_sorted[int(len(zs) * .01)]
-            depth_max = zs_sorted[int(len(zs) * .99)]
-        # determine depth number by inverse depth setting, see supplementary material
-        if args.max_d == 0:
-            image_int = intrinsic[images[i+1].camera_id]
-            image_ext = extrinsic[i+1]
-            image_r = image_ext[0:3, 0:3]
-            image_t = image_ext[0:3, 3]
-            p1 = [image_int[0, 2], image_int[1, 2], 1]
-            p2 = [image_int[0, 2] + 1, image_int[1, 2], 1]
-            P1 = np.matmul(np.linalg.inv(image_int), p1) * depth_min
-            P1 = np.matmul(np.linalg.inv(image_r), (P1 - image_t))
-            P2 = np.matmul(np.linalg.inv(image_int), p2) * depth_min
-            P2 = np.matmul(np.linalg.inv(image_r), (P2 - image_t))
-            depth_num = (1 / depth_min - 1 / depth_max) / (1 / depth_min - 1 / (depth_min + np.linalg.norm(P2 - P1)))
-        else:
-            depth_num = args.max_d
-        depth_interval = (depth_max - depth_min) / (depth_num - 1) / args.interval_scale
-        depth_ranges[i+1] = (depth_min, depth_interval, depth_num, depth_max)
-    print('depth_ranges[1]\n', depth_ranges[1], end='\n\n')
-
-    # view selection
-    score = np.zeros((len(images), len(images)))
-    queue = []
-    for i in range(len(images)):
-        for j in range(i + 1, len(images)):
-            queue.append((i, j))
-    def calc_score(inputs):
-        i, j = inputs
-        id_i = images[i+1].point3D_ids
-        id_j = images[j+1].point3D_ids
-        id_intersect = [it for it in id_i if it in id_j]
-        cam_center_i = -np.matmul(extrinsic[i+1][:3, :3].transpose(), extrinsic[i+1][:3, 3:4])[:, 0]
-        cam_center_j = -np.matmul(extrinsic[j+1][:3, :3].transpose(), extrinsic[j+1][:3, 3:4])[:, 0]
-        score = 0
-        for pid in id_intersect:
-            if pid == -1:
-                continue
-            p = points3d[pid].xyz
-            theta = (180 / np.pi) * np.arccos(np.dot(cam_center_i - p, cam_center_j - p) / np.linalg.norm(cam_center_i - p) / np.linalg.norm(cam_center_j - p))
-            score += np.exp(-(theta - args.theta0) * (theta - args.theta0) / (2 * (args.sigma1 if theta <= args.theta0 else args.sigma2) ** 2))
-        return i, j, score
-    p = mp.Pool(processes=mp.cpu_count())
-    result = p.map(calc_score, queue)
-    for i, j, s in result:
-        score[i, j] = s
-        score[j, i] = s
-    view_sel = []
-    for i in range(len(images)):
-        sorted_score = np.argsort(score[i])[::-1]
-        view_sel.append([(k, score[i, k]) for k in sorted_score[:10]])
-    print('view_sel[0]\n', view_sel[0], end='\n\n')
-
-    # write
-    os.makedirs(cam_dir, exist_ok=True)
-    os.makedirs(renamed_dir, exist_ok=True)
-    for i in range(num_images):
-        with open(os.path.join(cam_dir, '%08d_cam.txt' % i), 'w') as f:
-            f.write('extrinsic\n')
-            for j in range(4):
-                for k in range(4):
-                    f.write(str(extrinsic[i+1][j, k]) + ' ')
-                f.write('\n')
-            f.write('\nintrinsic\n')
-            for j in range(3):
-                for k in range(3):
-                    f.write(str(intrinsic[images[i+1].camera_id][j, k]) + ' ')
-                f.write('\n')
-            f.write('\n%f %f %f %f\n' % (depth_ranges[i+1][0], depth_ranges[i+1][1], depth_ranges[i+1][2], depth_ranges[i+1][3]))
-    with open(os.path.join(args.dense_folder, 'dense', 'pair.txt'), 'w') as f:
-        f.write('%d\n' % len(images))
-        for i, sorted_score in enumerate(view_sel):
-            f.write('%d\n%d ' % (i, len(sorted_score)))
-            for image_id, s in sorted_score:
-                f.write('%d %f ' % (image_id, s))
-            f.write('\n')
-    for i in range(num_images):
-        if args.convert_format:
-            img = cv2.imread(os.path.join(image_dir, images[i+1].name))
-            cv2.imwrite(os.path.join(renamed_dir, '%08d.jpg' % i), img)
-        else:
-            shutil.copyfile(os.path.join(image_dir, images[i+1].name), os.path.join(renamed_dir, '%08d.jpg' % i))
+if __name__ == "__main__":
+    main()
