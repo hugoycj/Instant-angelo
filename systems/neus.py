@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_efficient_distloss import flatten_eff_distloss
+from math import exp, ceil
+from torch.autograd import Variable
 
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
@@ -13,7 +15,89 @@ import systems
 from systems.base import BaseSystem
 from systems.criterions import PSNR, binary_cross_entropy
 
+class S3IM(torch.nn.Module):
+    def __init__(self, s3im_kernel_size = 4, s3im_stride=4, s3im_repeat_time=10, s3im_patch_height=64, size_average = True):
+        super(S3IM, self).__init__()
+        self.s3im_kernel_size = s3im_kernel_size
+        self.s3im_stride = s3im_stride
+        self.s3im_repeat_time = s3im_repeat_time
+        self.s3im_patch_height = s3im_patch_height
+        self.size_average = size_average
+        self.channel = 1
+        self.s3im_kernel = self.create_kernel(s3im_kernel_size, self.channel)
 
+
+    def gaussian(self, s3im_kernel_size, sigma):
+        gauss = torch.Tensor([exp(-(x - s3im_kernel_size//2)**2/float(2*sigma**2)) for x in range(s3im_kernel_size)])
+        return gauss/gauss.sum()
+
+    def create_kernel(self, s3im_kernel_size, channel):
+        _1D_window = self.gaussian(s3im_kernel_size, 1.5).unsqueeze(1)
+        _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
+        s3im_kernel = Variable(_2D_window.expand(channel, 1, s3im_kernel_size, s3im_kernel_size).contiguous())
+        return s3im_kernel
+
+    def _ssim(self, img1, img2, s3im_kernel, s3im_kernel_size, channel, size_average = True, s3im_stride=None):
+        mu1 = F.conv2d(img1, s3im_kernel, padding = (s3im_kernel_size-1)//2, groups = channel, stride=s3im_stride)
+        mu2 = F.conv2d(img2, s3im_kernel, padding = (s3im_kernel_size-1)//2, groups = channel, stride=s3im_stride)
+
+        mu1_sq = mu1.pow(2)
+        mu2_sq = mu2.pow(2)
+        mu1_mu2 = mu1*mu2
+
+        sigma1_sq = F.conv2d(img1*img1, s3im_kernel, padding = (s3im_kernel_size-1)//2, groups = channel, stride=s3im_stride) - mu1_sq
+        sigma2_sq = F.conv2d(img2*img2, s3im_kernel, padding = (s3im_kernel_size-1)//2, groups = channel, stride=s3im_stride) - mu2_sq
+        sigma12 = F.conv2d(img1*img2, s3im_kernel, padding = (s3im_kernel_size-1)//2, groups = channel, stride=s3im_stride) - mu1_mu2
+
+        C1 = 0.01**2
+        C2 = 0.03**2
+
+        ssim_map = ((2*mu1_mu2 + C1)*(2*sigma12 + C2))/((mu1_sq + mu2_sq + C1)*(sigma1_sq + sigma2_sq + C2))
+
+        if size_average:
+            return ssim_map.mean()
+        else:
+            return ssim_map.mean(1).mean(1).mean(1)
+
+    def ssim_loss(self, img1, img2):
+        """
+        img1, img2: torch.Tensor([b,c,h,w])
+        """
+        (_, channel, _, _) = img1.size()
+
+        if channel == self.channel and self.s3im_kernel.data.type() == img1.data.type():
+            s3im_kernel = self.s3im_kernel
+        else:
+            s3im_kernel = self.create_kernel(self.s3im_kernel_size, channel)
+
+            if img1.is_cuda:
+                s3im_kernel = s3im_kernel.cuda(img1.get_device())
+            s3im_kernel = s3im_kernel.type_as(img1)
+
+            self.s3im_kernel = s3im_kernel
+            self.channel = channel
+
+
+        return self._ssim(img1, img2, s3im_kernel, self.s3im_kernel_size, channel, self.size_average, s3im_stride=self.s3im_stride)
+
+    def forward(self, src_vec, tar_vec):
+        loss = 0.0
+        index_list = []
+        for i in range(self.s3im_repeat_time):
+            if i == 0:
+                tmp_index = torch.arange(len(tar_vec))
+                index_list.append(tmp_index)
+            else:
+                ran_idx = torch.randperm(len(tar_vec))
+                index_list.append(ran_idx)
+        res_index = torch.cat(index_list)
+        tar_all = tar_vec[res_index]
+        src_all = src_vec[res_index]
+        tar_patch = tar_all.permute(1, 0).reshape(1, 3, self.s3im_patch_height, -1)
+        src_patch = src_all.permute(1, 0).reshape(1, 3, self.s3im_patch_height, -1)
+        loss = (1 - self.ssim_loss(src_patch, tar_patch))
+        return loss
+    
 @systems.register('neus-system')
 class NeuSSystem(BaseSystem):
     """
@@ -27,6 +111,7 @@ class NeuSSystem(BaseSystem):
         }
         self.train_num_samples = self.config.model.train_num_rays * (self.config.model.num_samples_per_ray + self.config.model.get('num_samples_per_ray_bg', 0))
         self.train_num_rays = self.config.model.train_num_rays
+        self.s3im_loss = S3IM()
 
     def forward(self, batch):
         return self.model(batch['rays'])
@@ -109,16 +194,25 @@ class NeuSSystem(BaseSystem):
         # update train_num_rays
         if self.config.model.dynamic_ray_sampling:
             train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples_full'].sum().item()))        
-            self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
+            # self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
+            train_num_rays = ceil((self.train_num_rays * 0.9 + train_num_rays * 0.1) / 64) * 64
+            self.train_num_rays = min(train_num_rays, self.config.model.max_train_num_rays)
+            
+        if self.C(self.config.system.loss.lambda_rgb_mse) > 0:
+            loss_rgb_mse = F.mse_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
+            self.log('train/loss_rgb_mse', loss_rgb_mse)
+            loss += loss_rgb_mse * self.C(self.config.system.loss.lambda_rgb_mse)
 
-        loss_rgb_mse = F.mse_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
-        self.log('train/loss_rgb_mse', loss_rgb_mse)
-        loss += loss_rgb_mse * self.C(self.config.system.loss.lambda_rgb_mse)
+        if self.C(self.config.system.loss.lambda_rgb_l1) > 0:
+            loss_rgb_l1 = F.l1_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
+            self.log('train/loss_rgb', loss_rgb_l1)
+            loss += loss_rgb_l1 * self.C(self.config.system.loss.lambda_rgb_l1)        
 
-        loss_rgb_l1 = F.l1_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
-        self.log('train/loss_rgb', loss_rgb_l1)
-        loss += loss_rgb_l1 * self.C(self.config.system.loss.lambda_rgb_l1)        
-
+        if self.C(self.config.system.loss.get('lambda_rgb_s3im', 0))   > 0:
+            loss_rgb_s3im = self.s3im_loss(out['comp_rgb_full'], batch['rgb'])
+            self.log('train/loss_rgb_s3im', loss_rgb_s3im)
+            loss += loss_rgb_s3im *   self.C(self.config.system.loss.get('lambda_rgb_s3im', 0))  
+        
         loss_eikonal = ((torch.linalg.norm(out['sdf_grad_samples'], ord=2, dim=-1) - 1.)**2).mean()
         self.log('train/loss_eikonal', loss_eikonal)
         loss += loss_eikonal * self.C(self.config.system.loss.lambda_eikonal)
