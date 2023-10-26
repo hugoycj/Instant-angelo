@@ -180,18 +180,15 @@ class VolumeSphericalHarmonic(nn.Module):
     def __init__(self, config):
         super(VolumeSphericalHarmonic, self).__init__()
         self.config = config
-        self.n_dir_dims = self.config.get('n_dir_dims', 3)
         self.sh_level = 2
-        self.n_output_dims = 8*(self.sh_level + 1)
+        self.n_output_dims = 9*(self.sh_level + 1)
         self.n_input_dims = self.config.input_feature_dim
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
         self.network = network
         
     def forward(self, features, dirs, *args):
-        base_color = (features[..., 1:4] / SH_C0).unsqueeze(-1)
         network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
-        sh_coeff = self.network(network_inp).view(*features.shape[:-1], self.sh_level+1, 8).float()
-        sh_coeff = torch.concat([base_color, sh_coeff], dim=-1).permute(0, 2, 1)
+        sh_coeff = self.network(network_inp).view(*features.shape[:-1], 9, self.sh_level+1).float()
         color = svox2_sh_eval(self.sh_level, sh_coeff, dirs)
         return color
 

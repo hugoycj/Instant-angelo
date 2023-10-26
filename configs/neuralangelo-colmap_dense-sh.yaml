@@ -22,7 +22,7 @@ model:
   grid_prune: true
   grid_prune_occ_thre: 0.001
   dynamic_ray_sampling: false
-  batch_image_sampling: true
+  batch_image_sampling: false
   randomized: true
   ray_chunk: 2048
   cos_anneal_end: 20000
@@ -34,7 +34,7 @@ model:
   geometry:
     name: volume-sdf
     radius: ${model.radius}
-    feature_dim: 13
+    feature_dim: 65
     grad_type: analytic
     finite_difference_eps: progressive
     isosurface:
@@ -71,7 +71,7 @@ model:
       activation: ReLU
       output_activation: none
       n_neurons: 64
-      n_hidden_layers: 2
+      n_hidden_layers: 4
   # background model configurations
   num_samples_per_ray_bg: 256
   geometry_bg:

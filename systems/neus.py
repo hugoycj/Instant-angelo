@@ -194,9 +194,7 @@ class NeuSSystem(BaseSystem):
         # update train_num_rays
         if self.config.model.dynamic_ray_sampling:
             train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples_full'].sum().item()))        
-            # self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
-            train_num_rays = ceil((self.train_num_rays * 0.9 + train_num_rays * 0.1) / 64) * 64
-            self.train_num_rays = min(train_num_rays, self.config.model.max_train_num_rays)
+            self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
             
         if self.C(self.config.system.loss.lambda_rgb_mse) > 0:
             loss_rgb_mse = F.mse_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
