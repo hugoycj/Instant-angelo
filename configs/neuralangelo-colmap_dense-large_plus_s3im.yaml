@@ -1,11 +1,11 @@
-name: neuralangelo-colmap_plus_dense-sh-${basename:${dataset.root_dir}}
+name: neuralangelo-colmap_plus_dense-large_plus_s3im-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
 dataset:
   name: colmap
   root_dir: ???
-  img_downscale: 4 # specify training image size by either img_wh or img_downscale
+  img_downscale: 2 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
   n_test_traj_steps: 30
@@ -63,15 +63,18 @@ model:
       sphere_init_radius: 0.5
       weight_norm: true
   texture:
-    name: volume-SH
+    name: volume-dual-color
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
-    diffuse_warmup_steps: 5000 
+    dir_encoding_config:
+      otype: SphericalHarmonics
+      degree: 4
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 4
+    color_activation: sigmoid
   # background model configurations
   num_samples_per_ray_bg: 256
   geometry_bg:
@@ -119,6 +122,7 @@ system:
     # lambda_sdf_l1: [0, 1., 0.01, 20000]
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
+    lambda_rgb_s3im: 10.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_curvature: [0, 0, 5.e-1, 5000]

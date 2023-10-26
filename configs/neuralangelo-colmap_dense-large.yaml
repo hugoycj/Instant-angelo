@@ -1,4 +1,4 @@
-name: neuralangelo-colmap_plus_dense_plus_s3im-${basename:${dataset.root_dir}}
+name: neuralangelo-colmap_plus_dense-large-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
@@ -122,7 +122,6 @@ system:
     # lambda_sdf_l1: [0, 1., 0.01, 20000]
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
-    lambda_rgb_s3im: 10.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_curvature: [0, 0, 5.e-1, 5000]
