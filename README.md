@@ -59,6 +59,7 @@ The results will be saved under `logs` directory.
 ### Run Detail Reconstruction Mode without extra preprossing
 <details>
 <summary>[Click to expand]</summary>
+<img src="assets/sparse-50k.png">
 
 The detail reconstruction mode without additional preprocessing is optimal for scenarios with:
 * Image data captured under varying conditions over time or with inconsistent exposure levels. 
