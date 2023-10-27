@@ -31,9 +31,8 @@ Each separate data folder houses its own images folder.
 
 ## Start Reconstruction!
 ### Run Smooth Reconstruction Mode
-
----
-
+<details>
+<summary>[Click to expand]</summary>
 The smooth reconstruction mode is well-suited for the following cases:
 * When reconstructing a smooth object that does not have a high level of detail. The smooth mode works best for objects that have relatively simple, flowing surfaces without a lot of intricate features.
 <img src="assets/general_smooth.png">
@@ -55,10 +54,11 @@ Now it is time to start by running:
 bash run_neuralangelo-colmap_sparse.sh $YOUR_DATA_DIR
 ```
 The results will be saved under `logs` directory.
+</details>
 
 ### Run Detail Reconstruction Mode without extra preprossing
-
----
+<details>
+<summary>[Click to expand]</summary>
 
 The detail reconstruction mode without additional preprocessing is optimal for scenarios with:
 * Image data captured under varying conditions over time or with inconsistent exposure levels. 
@@ -79,9 +79,12 @@ Now it is time to start by running:
 ```
 bash run_neuralangelo-colmap_sparse-50k.sh  $YOUR_DATA_DIR
 ```
+</details>
 
 ### Run Detail Reconstruction Mode with MVS prior
----
+<details>
+<summary>[Click to expand]</summary>
+
 Generating high-fidelity surface reconstructions with only RGB inputs in 20,000 steps (around 20 minutes) is challenging, especially for sparse in-the-wild captures where occlusion and limited views make surface reconstruction an underconstrained problem. This can lead to optimization instability and difficulty converging. Introducing lidar, ToF depth, or predicted depth can help stabilize optimization and accelerate training. However, directly regularizing rendered depth is suboptimal due to bias introduced by density2sdf. Moreover, ensuring consistent depth across views is difficult, especially with lower-quality ToF sensors or predicted depth. We propose directly regularizing the SDF field using MVS point clouds and normals to alleviate the bias
 
 Importantly, in real-world scenarios like oblique photography and virtual tours, dense point clouds are already intermediate outputs. This allows directly utilizing the existing point clouds for regularization without extra computation. In such use cases, the point cloud prior comes for free as part of the capture process. 
@@ -98,20 +101,35 @@ Now it is time to start by running:
 ```
 bash run_neuralangelo-colmap_dense.sh  $YOUR_DATA_DIR
 ```
+</details>
 
 ## Frequently asked questions (FAQ)
+<details>
+<summary>[Click to expand]</summary>
+
 1. **Q:** CUDA out of memory. 
+
    **A:** Instant-angelo requires at least 10GB GPU memory. If you run out of memory,  consider decreasing `model.num_samples_per_ray` from 1024 to 512
+
 2. **Q:** What's the License for this repo?
+
    **A:** This repository is built on top of instant-nsr-pl and is licensed under the MIT License. The materials, code, and assets in this repository can be used for commercial purposes without explicit permission, in accordance with the terms of the MIT License. Users are free to use, modify, and distribute this content, even for commercial applications. However, appropriate attribution to the original instant-nsr-pl authors and this repository is requested. Please refer to the LICENSE file for full terms and conditions.
+
 3. **Q:** The reconstruction of my custom dataset is bad.
+
    **A:** This repository is under active development and its robustness across diverse real-world data is still unproven. Users may encounter issues when applying the method to new datasets. Please open an issue for any problems or contact the author directly at chongjieye@link.cuhk.edu.cn. 
+
 4. **Q:** This project fails to run on Windows
+
    **A:** This project has not been tested on Windows and the scripts may have compatibility issues. For the best experience at this stage of development, we recommend running experiments on a Linux system. We apologize that Windows support cannot be guaranteed currently. Please feel free to open an issue detailing any problems encountered when attempting to run on Windows. Community feedback will help improve cross-platform compatibility going forward.
+
 5. **Q:** Generate dense prior with Vis-MVSNet is slow
   **A:** Currently, preprocessing takes around 10~15 minutes for 300 frames, but there is still remains much room to improve efficiency by replacing Vis-MVSNet with state-of-the-art methods like MVSFormer or SimpleRecon. Moreover, preprocessing time could be substantially reduced by leveraging quantization and TensorRT. Overall, MVSNet allows generating the necessary point cloud prior an order of magnitude faster than traditional MVS approaches. 
+
 6. **Q:** The poor reliabity of the sparse and dense prior introduce in this repo
+
    **A:** Currently, this method relies on point clouds which limits robustness for textureless surfaces or glossy materials. An updated point cloud-free version that directly regularizes surfaces using image matching and warping is under development for release in late November 2023. This will improve robustness in challenging cases. Please open an issue for any specific point cloud-related difficulties encountered currently.
+</details>
 
 ## Related project:
 - [instant-nsr-pl](https://github.com/bennyguo/instant-nsr-pl): Great Instant-NSR implementation in PyTorch-Lightning! 
