@@ -30,7 +30,7 @@ To extract COLMAP data from custom images, you must first have COLMAP installed 
 Each separate data folder houses its own images folder.
 
 ## Start Reconstruction!
-### Run Smooth Reconstruction Mode
+### Run Smooth Surface Reconstruction in 20 Minutes
 <details>
 <summary>[Click to expand]</summary>
 <img src="assets/nsr2angelo.png">
@@ -55,7 +55,7 @@ bash run_neuralangelo-colmap_sparse.sh $YOUR_DATA_DIR
 The results will be saved under `logs` directory.
 </details>
 
-### Run Detail Reconstruction Mode without extra preprossing
+### Run Detail Surface Reconstruction in 1 Hour
 <details>
 <summary>[Click to expand]</summary>
 <img src="assets/sparse-50k.png">
@@ -81,7 +81,7 @@ bash run_neuralangelo-colmap_sparse-50k.sh  $YOUR_DATA_DIR
 ```
 </details>
 
-### Run Detail Reconstruction Mode with MVS prior
+### Run Detail Surface Reconstruction in 20 Minutes
 <details>
 <summary>[Click to expand]</summary>
 
