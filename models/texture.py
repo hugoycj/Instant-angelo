@@ -181,18 +181,18 @@ class VolumeSphericalHarmonic(nn.Module):
         super(VolumeSphericalHarmonic, self).__init__()
         self.config = config
         self.n_dir_dims = self.config.get('n_dir_dims', 3)
-        self.sh_level = 2
-        self.n_output_dims = 8*(self.sh_level + 1)
+        self.sh_level = 3
+        self.sh_dc_coeff = 1
+        self.sh_extra_coeff = (self.sh_level + 1) ** 2 - 1
+        self.n_output_dims = 3 * (self.sh_level + 1) ** 2 # 45 extra_param
         self.n_input_dims = self.config.input_feature_dim
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
         self.network = network
         
     def forward(self, features, dirs, *args):
-        base_color = (features[..., 1:4] / SH_C0).unsqueeze(-1)
         network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
-        sh_coeff = self.network(network_inp).view(*features.shape[:-1], self.sh_level+1, 8).float()
-        sh_coeff = torch.concat([base_color, sh_coeff], dim=-1).permute(0, 2, 1)
-        color = svox2_sh_eval(self.sh_level, sh_coeff, dirs)
+        sh_coeff = self.network(network_inp).view(*features.shape[:-1], 3, (self.sh_dc_coeff + self.sh_extra_coeff)).float()
+        color = svox2_sh_eval(self.sh_level, sh_coeff.permute(0, 2, 1), dirs)
         return color
 
     def update_step(self, epoch, global_step):
