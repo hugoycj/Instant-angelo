@@ -200,3 +200,43 @@ class VolumeSphericalHarmonic(nn.Module):
     
     def regularizations(self, out):
         return {}
+
+
+def svox2_sh_eval_progressive(current_degree, sh_param, dirs):
+    max_sh_param = (current_degree+1)**2
+    sh_bases = svox2_eval_sh_bases(max_sh_param, dirs)
+    if sh_param.dim == 2:
+        sh_param = sh_param[:, None]  # SH, 3
+    result = (sh_param[:, :max_sh_param] * sh_bases[..., None]).sum(dim=1)
+    return result
+
+@models.register('volume-progressive-SH')
+class VolumeProgressiveSphericalHarmonic(nn.Module):
+    def __init__(self, config):
+        super(VolumeProgressiveSphericalHarmonic, self).__init__()
+        self.config = config
+        self.n_dir_dims = self.config.get('n_dir_dims', 3)
+        self.current_level = 0
+        self.sh_level = 3
+        self.sh_dc_coeff = 1
+        self.sh_extra_coeff = (self.sh_level + 1) ** 2 - 1
+        self.n_output_dims = 3 * (self.sh_level + 1) ** 2 # 45 extra_param
+        self.n_input_dims = self.config.input_feature_dim
+        self.start_level, self.start_step, self.update_steps = config['start_level'], config['start_step'], config['update_steps']
+        network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
+        self.network = network
+        
+    def forward(self, features, dirs, *args):
+        network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
+        sh_coeff = self.network(network_inp).view(*features.shape[:-1], (self.sh_dc_coeff + self.sh_extra_coeff), 3).float()
+        color = svox2_sh_eval_progressive(self.current_level, sh_coeff, dirs)
+        return color
+
+    def update_step(self, epoch, global_step):
+        current_level = min(self.start_level + max(global_step - self.start_step, 0) // self.update_steps, self.sh_level)
+        if current_level > self.current_level:
+            rank_zero_info(f'Update SH level to {current_level}')
+        self.active_sh_level = current_level
+    
+    def regularizations(self, out):
+        return {}
