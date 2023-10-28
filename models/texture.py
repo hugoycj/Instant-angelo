@@ -5,7 +5,7 @@ import models
 from models.utils import get_activation
 from models.network_utils import get_encoding, get_mlp
 from systems.utils import update_module_step
-
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
 
 @models.register('volume-radiance')
 class VolumeRadiance(nn.Module):
@@ -181,7 +181,7 @@ class VolumeSphericalHarmonic(nn.Module):
         super(VolumeSphericalHarmonic, self).__init__()
         self.config = config
         self.n_dir_dims = self.config.get('n_dir_dims', 3)
-        self.sh_level = 3
+        self.sh_level = config['sh_level']
         self.sh_dc_coeff = 1
         self.sh_extra_coeff = (self.sh_level + 1) ** 2 - 1
         self.n_output_dims = 3 * (self.sh_level + 1) ** 2 # 45 extra_param
@@ -217,7 +217,7 @@ class VolumeProgressiveSphericalHarmonic(nn.Module):
         self.config = config
         self.n_dir_dims = self.config.get('n_dir_dims', 3)
         self.current_level = 0
-        self.sh_level = 3
+        self.sh_level = config['sh_level']
         self.sh_dc_coeff = 1
         self.sh_extra_coeff = (self.sh_level + 1) ** 2 - 1
         self.n_output_dims = 3 * (self.sh_level + 1) ** 2 # 45 extra_param
@@ -236,7 +236,7 @@ class VolumeProgressiveSphericalHarmonic(nn.Module):
         current_level = min(self.start_level + max(global_step - self.start_step, 0) // self.update_steps, self.sh_level)
         if current_level > self.current_level:
             rank_zero_info(f'Update SH level to {current_level}')
-        self.active_sh_level = current_level
+        self.current_level = current_level
     
     def regularizations(self, out):
         return {}
