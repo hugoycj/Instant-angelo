@@ -10,3 +10,4 @@ PyMCubes
 pyransac3d
 torch_efficient_distloss
 tensorboard
+click
