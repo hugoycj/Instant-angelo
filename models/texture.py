@@ -191,9 +191,14 @@ class VolumeSphericalHarmonic(nn.Module):
         
     def forward(self, features, dirs, *args):
         network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
-        sh_coeff = self.network(network_inp).view(*features.shape[:-1], 3, (self.sh_dc_coeff + self.sh_extra_coeff)).float()
-        color = svox2_sh_eval(self.sh_level, sh_coeff.permute(0, 2, 1), dirs)
-        return color
+        sh_coeff = self.network(network_inp).view(*features.shape[:-1], (self.sh_dc_coeff + self.sh_extra_coeff), 3).float()
+        color = svox2_sh_eval(self.sh_level, sh_coeff, dirs)
+        return color, sh_coeff
+
+    def get_sh_coeff(self, features, *args):
+        network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
+        sh_coeff = self.network(network_inp).view(*features.shape[:-1], (self.sh_dc_coeff + self.sh_extra_coeff), 3).float()
+        return sh_coeff
 
     def update_step(self, epoch, global_step):
         pass
@@ -230,7 +235,12 @@ class VolumeProgressiveSphericalHarmonic(nn.Module):
         network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
         sh_coeff = self.network(network_inp).view(*features.shape[:-1], (self.sh_dc_coeff + self.sh_extra_coeff), 3).float()
         color = svox2_sh_eval_progressive(self.current_level, sh_coeff, dirs)
-        return color
+        return color, sh_coeff
+
+    def get_sh_coeff(self, features, *args):
+        network_inp = torch.cat([features.view(-1, features.shape[-1])] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
+        sh_coeff = self.network(network_inp).view(*features.shape[:-1], (self.sh_dc_coeff + self.sh_extra_coeff), 3).float()
+        return sh_coeff
 
     def update_step(self, epoch, global_step):
         current_level = min(self.start_level + max(global_step - self.start_step, 0) // self.update_steps, self.sh_level)

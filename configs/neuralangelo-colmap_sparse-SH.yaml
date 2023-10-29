@@ -8,13 +8,13 @@ dataset:
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
-  n_test_traj_steps: 30
+  n_test_traj_steps: 2
   apply_mask: false
   load_data_on_gpu: false
   dense_pcd_path: null
 
 model:
-  name: neus
+  name: sh-neus
   radius: 2.5
   num_samples_per_ray: 1024
   train_num_rays: 128
@@ -52,7 +52,7 @@ model:
       include_xyz: true
       start_level: 8
       start_step: 5000
-      update_steps: 2000
+      update_steps: 1000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -120,6 +120,7 @@ system:
     lambda_normal: 0.
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
+    lambda_sh_mse: 0.01
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_curvature: [0, 0, 5.e-1, 5000]
