@@ -50,7 +50,7 @@ model:
       base_resolution: 32
       per_level_scale: 1.3195079107728942
       include_xyz: true
-      start_level: 4
+      start_level: 6
       start_step: 5000
       update_steps: 1000
     mlp_network_config:
