@@ -27,6 +27,7 @@ class NeuSSystem(BaseSystem):
         }
         self.train_num_samples = self.config.model.train_num_rays * (self.config.model.num_samples_per_ray + self.config.model.get('num_samples_per_ray_bg', 0))
         self.train_num_rays = self.config.model.train_num_rays
+        self.sample_foreground_ratio = self.config.dataset.get('sample_foreground_ratio', 1.0)
 
     def forward(self, batch):
         return self.model(batch['rays'])
@@ -36,9 +37,30 @@ class NeuSSystem(BaseSystem):
             index = batch['index'].cpu()
         else:
             if self.config.model.batch_image_sampling:
-                index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,))
+                if self.sample_foreground_ratio < 1:
+                    fg_ray_index = torch.randint(0, len(self.dataset.all_fg_indexs), size=(int(self.train_num_rays * 0.8),))
+                    bg_ray_index = torch.randint(0, len(self.dataset.all_bg_indexs), size=(self.train_num_rays - int(self.train_num_rays * 0.8),))
+                    
+                    fg_ray_index = self.dataset.all_fg_indexs[fg_ray_index]
+                    bg_ray_index = self.dataset.all_bg_indexs[bg_ray_index]
+                    ray_index = torch.cat([fg_ray_index, bg_ray_index], dim=0)
+                    index, y, x = ray_index[:, 0], ray_index[:, 1], ray_index[:, 2]
+                else:
+                    index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,))
+                    x = torch.randint(
+                        0, self.dataset.w, size=(self.train_num_rays,)
+                    )
+                    y = torch.randint(
+                        0, self.dataset.h, size=(self.train_num_rays,)
+                    )
             else:
                 index = torch.randint(0, len(self.dataset.all_images), size=(1,))
+                x = torch.randint(
+                        0, self.dataset.w, size=(self.train_num_rays,)
+                    )
+                y = torch.randint(
+                    0, self.dataset.h, size=(self.train_num_rays,)
+                )
         if stage in ['train']:
             c2w = self.dataset.all_c2w[index]
             
@@ -50,12 +72,6 @@ class NeuSSystem(BaseSystem):
                 pts_normal = self.dataset.pts3d_normal[pts_index]
             else:
                 pts_normal = torch.tensor([])
-            x = torch.randint(
-                0, self.dataset.w, size=(self.train_num_rays,)
-            )
-            y = torch.randint(
-                0, self.dataset.h, size=(self.train_num_rays,)
-            )
             if self.dataset.directions.ndim == 3: # (H, W, 3)
                 directions = self.dataset.directions[y, x]
             elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
@@ -88,10 +104,10 @@ class NeuSSystem(BaseSystem):
         else:
             self.model.background_color = torch.ones((3,), dtype=torch.float32)
         
+        self.model.background_color = self.model.background_color.to(self.device)
         if self.dataset.apply_mask:
             rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
         
-        self.model.background_color = self.model.background_color.to(self.device)
         batch.update({
             'rays': rays.to(self.device),
             'rgb': rgb.to(self.device),

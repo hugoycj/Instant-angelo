@@ -206,8 +206,8 @@ class ColmapDatasetBase():
 
             imdata = read_images_binary(os.path.join(self.config.root_dir, 'sparse/0/images.bin'))
 
-            mask_dir = os.path.join(self.config.root_dir, 'masks')
-            has_mask = os.path.exists(mask_dir) # TODO: support partial masks
+            mask_dir = os.path.join(self.config.root_dir, 'mask')
+            has_mask = os.path.exists(mask_dir)
             apply_mask = has_mask and self.config.apply_mask
             
             all_c2w, all_images, all_fg_masks = [], [], []
@@ -304,6 +304,7 @@ class ColmapDatasetBase():
             self.all_images, self.all_fg_masks = torch.stack(self.all_images, dim=0).float(), torch.stack(self.all_fg_masks, dim=0).float()
             self.all_points = self.pts3d
             self.all_points_confidence = self.pts3d_confidence 
+            self.all_fg_indexs = torch.cat(self.all_fg_indexs, dim=0)
             self.all_bg_indexs = torch.cat(self.all_bg_indexs, dim=0)
 
         self.all_c2w = self.all_c2w.float()
