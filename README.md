@@ -139,4 +139,5 @@ bash run_neuralangelo-colmap_dense.sh  $YOUR_DATA_DIR
 ## Acknocklement
 * Thanks to bennyguo for his excellent pipeline [instant-nsr-pl](https://github.com/bennyguo/instant-nsr-pl)
 * Thanks to RaduAlexandru for his implementation of improved curvature loss in [permuto_sdf](https://github.com/RaduAlexandru/permuto_sdf)
+* Thanks to Alex Yu for his implementation of spherical harmonics in [svox2](https://github.com/sxyu/svox2/tree/master)
 * Thanks for Zesong Yang and Chris for providing valuable insights and feedback that assisted development

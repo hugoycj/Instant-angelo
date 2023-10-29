@@ -1,4 +1,4 @@
-name: neuralangelo-colmap_sparse-${basename:${dataset.root_dir}}
+name: neuralangelo-colmap_sparse-SH-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
@@ -8,13 +8,13 @@ dataset:
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
-  n_test_traj_steps: 30
+  n_test_traj_steps: 2
   apply_mask: false
   load_data_on_gpu: false
   dense_pcd_path: null
 
 model:
-  name: neus
+  name: sh-neus
   radius: 2.5
   num_samples_per_ray: 1024
   train_num_rays: 128
@@ -34,7 +34,7 @@ model:
   geometry:
     name: volume-sdf
     radius: ${model.radius}
-    feature_dim: 13
+    feature_dim: 65
     grad_type: analytic
     finite_difference_eps: progressive
     isosurface:
@@ -52,7 +52,7 @@ model:
       include_xyz: true
       start_level: 8
       start_step: 5000
-      update_steps: 2000
+      update_steps: 1000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -63,12 +63,9 @@ model:
       sphere_init_radius: 0.5
       weight_norm: true
   texture:
-    name: volume-dual-color
+    name: volume-SH
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
-    diffuse_warmup_steps: 5000 
-    dir_encoding_config:
-      otype: SphericalHarmonics
-      degree: 4
+    sh_level: 2
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -93,9 +90,9 @@ model:
       base_resolution: 32
       per_level_scale: 1.3195079107728942
       include_xyz: true
-      start_level: 4
+      start_level: 8
       start_step: 5000
-      update_steps: 1000
+      update_steps: 2000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -123,6 +120,7 @@ system:
     lambda_normal: 0.
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
+    lambda_sh_mse: 0.01
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_curvature: [0, 0, 5.e-1, 5000]

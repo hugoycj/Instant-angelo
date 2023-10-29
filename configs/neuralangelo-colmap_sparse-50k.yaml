@@ -50,7 +50,7 @@ model:
       base_resolution: 32
       per_level_scale: 1.3195079107728942
       include_xyz: true
-      start_level: 4
+      start_level: 8
       start_step: 5000
       update_steps: 2000
     mlp_network_config:
@@ -74,7 +74,7 @@ model:
       activation: ReLU
       output_activation: none
       n_neurons: 64
-      n_hidden_layers: 2
+      n_hidden_layers: 4
     color_activation: sigmoid
   # background model configurations
   num_samples_per_ray_bg: 256

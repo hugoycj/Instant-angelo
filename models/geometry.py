@@ -156,7 +156,7 @@ class VolumeSDF(BaseImplicitGeometry):
         if self.grad_type == 'finite_difference':
             rank_zero_info(f"Using finite difference to compute gradients with eps={self.finite_difference_eps}")
 
-    def forward(self, points, with_grad=True, with_feature=True, with_laplace=False):
+    def forward(self, points, with_grad=True, with_feature=True, with_laplace=False, with_auxiliary_feature=False):
         with torch.inference_mode(torch.is_inference_mode_enabled() and not (with_grad and self.grad_type == 'analytic')):
             with torch.set_grad_enabled(self.training or (with_grad and self.grad_type == 'analytic')):
                 if with_grad and self.grad_type == 'analytic':
@@ -179,41 +179,6 @@ class VolumeSDF(BaseImplicitGeometry):
                             sdf, points_, grad_outputs=torch.ones_like(sdf),
                             create_graph=True, retain_graph=True, only_inputs=True
                         )[0]
-                        
-                        if with_laplace:
-                            eps=self._finite_difference_eps
-                            rand_directions=torch.randn_like(points)
-                            rand_directions=F.normalize(rand_directions,dim=-1)
-
-                            #instead of random direction we take the normals at these points, and calculate a random vector that is orthogonal 
-                            normals=F.normalize(grad,dim=-1)
-                            tangent=torch.cross(normals, rand_directions)
-                            rand_directions=tangent #set the random moving direction to be the tangent direction now
-                            
-                            points_shifted=points.clone()+rand_directions*eps
-                            offsets = torch.as_tensor(
-                            [
-                                [eps, 0.0, 0.0],
-                                [-eps, 0.0, 0.0],
-                                [0.0, eps, 0.0],
-                                [0.0, -eps, 0.0],
-                                [0.0, 0.0, eps],
-                                [0.0, 0.0, -eps],
-                            ]
-                            ).to(points_)
-                            points_shifted_d_ = (points_shifted[...,None,:] + offsets).clamp(-self.radius, self.radius)
-                            points_shifted_d = scale_anything(points_shifted_d_, (-self.radius, self.radius), (0, 1))
-                            points_shifted_d_sdf = self.network(self.encoding(points_shifted_d.view(-1, 3)))[...,0].view(*points.shape[:-1], 6).float()
-                            sdf_gradients_shifted = 0.5 * (points_shifted_d_sdf[..., 0::2] - points_shifted_d_sdf[..., 1::2]) / eps  
-
-                            normals_shifted=F.normalize(sdf_gradients_shifted,dim=-1)
-
-                            dot=(normals*normals_shifted).sum(dim=-1, keepdim=True)
-                            #the dot would assign low weight importance to normals that are almost the same, and increasing error the more they deviate. So it's something like and L2 loss. But we want a L1 loss so we get the angle, and then we map it to range [0,1]
-                            angle=torch.acos(torch.clamp(dot, -1.0+1e-6, 1.0-1e-6)) #goes to range 0 when the angle is the same and pi when is opposite
-
-                            laplace=angle/math.pi #map to [0,1 range]
-
                     elif self.grad_type == 'finite_difference':
                         eps = self._finite_difference_eps
                         offsets = torch.as_tensor(
@@ -230,39 +195,47 @@ class VolumeSDF(BaseImplicitGeometry):
                         points_d = scale_anything(points_d_, (-self.radius, self.radius), (0, 1))
                         points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[...,0].view(*points.shape[:-1], 6).float()
                         grad = 0.5 * (points_d_sdf[..., 0::2] - points_d_sdf[..., 1::2]) / eps  
+                
+                if with_laplace or with_auxiliary_feature:
+                    eps=self._finite_difference_eps
+                    rand_directions=torch.randn_like(points)
+                    rand_directions=F.normalize(rand_directions,dim=-1)
 
-                        if with_laplace:
-                            rand_directions=torch.randn_like(points)
-                            rand_directions=F.normalize(rand_directions,dim=-1)
+                    #instead of random direction we take the normals at these points, and calculate a random vector that is orthogonal 
+                    normals=F.normalize(grad,dim=-1)
+                    tangent=torch.cross(normals, rand_directions)
+                    rand_directions=tangent #set the random moving direction to be the tangent direction now
+                    
+                    points_shifted=points.clone()+rand_directions*eps
 
-                            #instead of random direction we take the normals at these points, and calculate a random vector that is orthogonal 
-                            normals=F.normalize(grad,dim=-1)
-                            tangent=torch.cross(normals, rand_directions)
-                            rand_directions=tangent #set the random moving direction to be the tangent direction now
-                            
-                            offsets = torch.as_tensor(
-                            [
-                                [eps, 0.0, 0.0],
-                                [-eps, 0.0, 0.0],
-                                [0.0, eps, 0.0],
-                                [0.0, -eps, 0.0],
-                                [0.0, 0.0, eps],
-                                [0.0, 0.0, -eps],
-                            ]
-                            ).to(points_)
-                            points_shifted = points_.clone()+rand_directions*eps
-                            points_shifted_d_ = (points_shifted[...,None,:] + offsets).clamp(-self.radius, self.radius)
-                            points_shifted_d = scale_anything(points_shifted_d_, (-self.radius, self.radius), (0, 1))
-                            
-                            points_shifted_d_sdf = self.network(self.encoding(points_shifted_d.view(-1, 3)))[...,0].view(*points.shape[:-1], 6).float()
-                            sdf_gradients_shifted = 0.5 * (points_shifted_d_sdf[..., 0::2] - points_shifted_d_sdf[..., 1::2]) / eps  
-                            normals_shifted=F.normalize(sdf_gradients_shifted,dim=-1)
+                if with_auxiliary_feature:
+                    points_shifted_ = scale_anything(points_shifted, (-self.radius, self.radius), (0, 1))
+                    points_shifted_feature = self.network(self.encoding(points_shifted_.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims).float()
+                    if 'feature_activation' in self.config:
+                        points_shifted_feature = get_activation(self.config.feature_activation)(points_shifted_feature)
+                if with_laplace:                    
+                    offsets = torch.as_tensor(
+                    [
+                        [eps, 0.0, 0.0],
+                        [-eps, 0.0, 0.0],
+                        [0.0, eps, 0.0],
+                        [0.0, -eps, 0.0],
+                        [0.0, 0.0, eps],
+                        [0.0, 0.0, -eps],
+                    ]
+                    ).to(points_)
+                    points_shifted_d_ = (points_shifted[...,None,:] + offsets).clamp(-self.radius, self.radius)
+                    points_shifted_d = scale_anything(points_shifted_d_, (-self.radius, self.radius), (0, 1))
+                    points_shifted_d_sdf = self.network(self.encoding(points_shifted_d.view(-1, 3)))[...,0].view(*points.shape[:-1], 6).float()
+                    sdf_gradients_shifted = 0.5 * (points_shifted_d_sdf[..., 0::2] - points_shifted_d_sdf[..., 1::2]) / eps  
 
-                            dot=(normals*normals_shifted).sum(dim=-1, keepdim=True)
-                            #the dot would assign low weight importance to normals that are almost the same, and increasing error the more they deviate. So it's something like and L2 loss. But we want a L1 loss so we get the angle, and then we map it to range [0,1]
-                            angle=torch.acos(torch.clamp(dot, -1.0+1e-6, 1.0-1e-6)) #goes to range 0 when the angle is the same and pi when is opposite
+                    normals_shifted=F.normalize(sdf_gradients_shifted,dim=-1)
 
-                            laplace=angle/math.pi #map to [0,1 range]
+                    dot=(normals*normals_shifted).sum(dim=-1, keepdim=True)
+                    #the dot would assign low weight importance to normals that are almost the same, and increasing error the more they deviate. So it's something like and L2 loss. But we want a L1 loss so we get the angle, and then we map it to range [0,1]
+                    angle=torch.acos(torch.clamp(dot, -1.0+1e-6, 1.0-1e-6)) #goes to range 0 when the angle is the same and pi when is opposite
+
+                    laplace=angle/math.pi #map to [0,1 range]
 
         rv = [sdf]
         if with_grad:
@@ -271,6 +244,8 @@ class VolumeSDF(BaseImplicitGeometry):
             rv.append(feature)
         if with_laplace:
             rv.append(laplace)
+        if with_auxiliary_feature:
+            rv.append(points_shifted_feature)
         rv = [v if self.training else v.detach() for v in rv]
         return rv[0] if len(rv) == 1 else rv
 

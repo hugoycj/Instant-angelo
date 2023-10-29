@@ -1,4 +1,4 @@
-name: neuralangelo-colmap_sparse-${basename:${dataset.root_dir}}
+name: neuralangelo-colmap_plus_dense-SH-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
@@ -8,10 +8,10 @@ dataset:
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
-  n_test_traj_steps: 30
+  n_test_traj_steps: 2
   apply_mask: false
   load_data_on_gpu: false
-  dense_pcd_path: null
+  dense_pcd_path: dense/fused.ply
 
 model:
   name: neus
@@ -41,7 +41,7 @@ model:
       method: mc
       resolution: 512
       chunk: 2097152
-      threshold: 0.001
+      threshold: 0.
     xyz_encoding_config:
       otype: ProgressiveBandHashGrid
       n_levels: 16
@@ -52,23 +52,20 @@ model:
       include_xyz: true
       start_level: 8
       start_step: 5000
-      update_steps: 2000
+      update_steps: 1000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
       output_activation: none
       n_neurons: 64
-      n_hidden_layers: 2
+      n_hidden_layers: 1
       sphere_init: true
       sphere_init_radius: 0.5
       weight_norm: true
   texture:
-    name: volume-dual-color
+    name: volume-SH
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
-    diffuse_warmup_steps: 5000 
-    dir_encoding_config:
-      otype: SphericalHarmonics
-      degree: 4
+    sh_level: 2
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -103,7 +100,7 @@ model:
       n_neurons: 64
       n_hidden_layers: 1
   texture_bg:
-    name: volume-radiance
+    name: volume-dual-color
     input_feature_dim: ${model.geometry_bg.feature_dim}
     dir_encoding_config:
       otype: SphericalHarmonics
@@ -119,10 +116,11 @@ model:
 system:
   name: neus-system
   loss:
-    lambda_sdf_l1: [0, 1, 0, 20000]
-    lambda_normal: 0.
+    lambda_sdf_l1: [0, 1., 0.1, 20000]
+    # lambda_sdf_l1: [0, 1., 0.01, 20000]
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
+    lambda_sh_mse: 0.01
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_curvature: [0, 0, 5.e-1, 5000]
