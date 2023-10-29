@@ -315,3 +315,106 @@ class NeuSModel(BaseModel):
             rgb = self.texture(feature, -normal, normal) # set the viewing directions to the normal to get "albedo"
             mesh['v_rgb'] = rgb.cpu()
         return mesh
+
+@models.register('sh-neus')
+class SphericalHarmonicNeuSModel(NeuSModel):
+    def forward_(self, rays):
+        n_rays = rays.shape[0]
+        rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
+
+        with torch.no_grad():
+            ray_indices, t_starts, t_ends = ray_marching(
+                rays_o, rays_d,
+                scene_aabb=self.scene_aabb,
+                grid=self.occupancy_grid if self.config.grid_prune else None,
+                alpha_fn=None,
+                near_plane=None, far_plane=None,
+                render_step_size=self.render_step_size,
+                stratified=self.randomized,
+                cone_angle=0.0,
+                alpha_thre=0.0
+            )
+        
+        ray_indices = ray_indices.long()
+        t_origins = rays_o[ray_indices]
+        t_dirs = rays_d[ray_indices]
+        midpoints = (t_starts + t_ends) / 2.
+        positions = t_origins + t_dirs * midpoints
+        dists = t_ends - t_starts
+
+        sdf, sdf_grad, feature, sdf_laplace, auxiliary_feature = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True, with_auxiliary_feature=True)
+        normal = F.normalize(sdf_grad, p=2, dim=-1)
+        alpha = self.get_alpha(sdf, normal, t_dirs, dists)[...,None]
+        rgb, sh_coeff = self.texture(feature, t_dirs, normal)
+        auxiliary_sh_coeff = self.texture.get_sh_coeff(auxiliary_feature, normal)
+
+        weights = render_weight_from_alpha(alpha, ray_indices=ray_indices, n_rays=n_rays)
+        opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
+        depth = accumulate_along_rays(weights, ray_indices, values=midpoints, n_rays=n_rays)
+        comp_rgb = accumulate_along_rays(weights, ray_indices, values=rgb, n_rays=n_rays)
+
+        comp_normal = accumulate_along_rays(weights, ray_indices, values=normal, n_rays=n_rays)
+        comp_normal = F.normalize(comp_normal, p=2, dim=-1)
+
+        out = {
+            'comp_rgb': comp_rgb,
+            'comp_normal': comp_normal,
+            'opacity': opacity,
+            'depth': depth,
+            'rays_valid': opacity > 0,
+            'num_samples': torch.as_tensor([len(t_starts)], dtype=torch.int32, device=rays.device)
+        }
+
+        if self.training:
+            out.update({
+                'sdf_samples': sdf,
+                'sdf_grad_samples': sdf_grad,
+                'weights': weights.view(-1),
+                'points': midpoints.view(-1),
+                'intervals': dists.view(-1),
+                'ray_indices': ray_indices.view(-1),
+                'sh_coeff': sh_coeff,
+                'auxiliary_sh_coeff': auxiliary_sh_coeff   
+            })
+            out.update({
+                'sdf_laplace_samples': sdf_laplace
+            })
+
+        if self.config.learned_background:
+            out_bg = self.forward_bg_(rays)
+        else:
+            out_bg = {
+                'comp_rgb': self.background_color[None,:].expand(*comp_rgb.shape),
+                'num_samples': torch.zeros_like(out['num_samples']),
+                'rays_valid': torch.zeros_like(out['rays_valid'])
+            }
+
+        out_full = {
+            'comp_rgb': out['comp_rgb'] + out_bg['comp_rgb'] * (1.0 - out['opacity']),
+            'num_samples': out['num_samples'] + out_bg['num_samples'],
+            'rays_valid': out['rays_valid'] | out_bg['rays_valid']
+        }
+
+        return {
+            **out,
+            **{k + '_bg': v for k, v in out_bg.items()},
+            **{k + '_full': v for k, v in out_full.items()}
+        }
+        
+    def regularizations(self, out):
+        losses = {}
+        losses['sh_mse'] = F.mse_loss(out['sh_coeff'], out['auxiliary_sh_coeff'])
+        losses.update(self.geometry.regularizations(out))
+        losses.update(self.texture.regularizations(out))
+        return losses
+
+    @torch.no_grad()
+    def export(self, export_config):
+        mesh = self.isosurface()
+        if export_config.export_vertex_color:
+            _, sdf_grad, feature = chunk_batch(self.geometry, export_config.chunk_size, False, mesh['v_pos'].to(self.rank), with_grad=True, with_feature=True)
+            normal = F.normalize(sdf_grad, p=2, dim=-1)
+            sh_coeff = self.texture.get_sh_coeff(feature, normal) # set the viewing directions to the normal to get "albedo"
+            base_color = sh_coeff[..., :3] * 0.28209479177387814 + 0.5
+            mesh['v_rgb'] = base_color.cpu()
+        return mesh
