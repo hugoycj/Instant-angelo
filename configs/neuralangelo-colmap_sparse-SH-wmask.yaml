@@ -16,7 +16,7 @@ dataset:
 
 model:
   name: sh-neus
-  radius: 1.0
+  radius: 1.5
   num_samples_per_ray: 1024
   train_num_rays: 128
   max_train_num_rays: 8192
@@ -52,7 +52,7 @@ model:
       per_level_scale: 1.3195079107728942
       include_xyz: true
       start_level: 4
-      start_step: 5000
+      start_step: 0
       update_steps: 1000
     mlp_network_config:
       otype: VanillaMLP
@@ -65,8 +65,8 @@ model:
       weight_norm: true
   texture:
     name: volume-SH
+    sh_level: 3
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
-    sh_level: 2
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
