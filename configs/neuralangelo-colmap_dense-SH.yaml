@@ -14,7 +14,7 @@ dataset:
   dense_pcd_path: dense/fused.ply
 
 model:
-  name: neus
+  name: sh-neus
   radius: 2.5
   num_samples_per_ray: 1024
   train_num_rays: 128
