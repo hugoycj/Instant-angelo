@@ -31,14 +31,19 @@ def contract_to_unisphere(x, radius, contraction_type):
 
 
 class MarchingCubeHelper(nn.Module):
-    def __init__(self, resolution, use_torch=True):
+    def __init__(self, resolution, method='mc'):
         super().__init__()
         self.resolution = resolution
-        self.use_torch = use_torch
         self.points_range = (0, 1)
-        if self.use_torch:
-            import torchmcubes
-            self.mc_func = torchmcubes.marching_cubes
+        self.method = method
+        try:
+            import cumcubes
+        except:
+            print("Cannot find cuda accelerated marching cube, downgraded to cpu version!")
+            self.method = 'mc'
+
+        if method == 'CuMCubes':
+            self.mc_func = cumcubes.marching_cubes
         else:
             import mcubes
             self.mc_func = mcubes.marching_cubes
@@ -54,7 +59,7 @@ class MarchingCubeHelper(nn.Module):
 
     def forward(self, level, threshold=0.):
         level = level.float().view(self.resolution, self.resolution, self.resolution)
-        if self.use_torch:
+        if self.method == 'CuMCubes':
             verts, faces = self.mc_func(level.to(get_rank()), threshold)
             verts, faces = verts.cpu(), faces.cpu().long()
         else:
@@ -71,10 +76,8 @@ class BaseImplicitGeometry(BaseModel):
     def __init__(self, config):
         super().__init__(config)
         if self.config.isosurface is not None:
-            assert self.config.isosurface.method in ['mc', 'mc-torch']
-            if self.config.isosurface.method == 'mc-torch':
-                raise NotImplementedError("Please do not use mc-torch. It currently has some scaling issues I haven't fixed yet.")
-            self.helper = MarchingCubeHelper(self.config.isosurface.resolution, use_torch=self.config.isosurface.method=='mc-torch')
+            assert self.config.isosurface.method in ['mc', 'CuMCubes']
+            self.helper = MarchingCubeHelper(self.config.isosurface.resolution, method=self.config.isosurface.method)
         self.radius = self.config.radius
         self.contraction_type = None # assigned in system
 

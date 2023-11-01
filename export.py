@@ -92,7 +92,7 @@ def main():
     if args.decimate > 0:
         logging.info("Decimating mesh.")
         mesh = decimate_mesh(mesh, args.decimate)
-        mesh.export(os.path.join(args.output_dir, f'{config.name}_simplified.ply'))
+        mesh.export(os.path.join(args.output_dir, f'{config.name}_LOD.ply'))
 
     logging.info("Export finished successfully.")
     
