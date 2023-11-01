@@ -5,6 +5,7 @@ import time
 import logging
 from datetime import datetime
 import trimesh
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,9 +28,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', default='0', help='GPU(s) to be used')
     parser.add_argument('--exp_dir', required=True)
-    parser.add_argument('--output-dir', required=True)
-    
-    parser.add_argument('--decimate', type=float, help='Specifies the desired final size of the mesh. \
+    parser.add_argument('--output-dir', default='results')
+
+    parser.add_argument('--decimate', default=0.05, type=float, help='Specifies the desired final size of the mesh. \
                         If the number is less than 1, it represents the final size as a percentage of the initial size. \
                         If the number is greater than 1, it represents the desired number of faces.')
     args, extras = parser.parse_known_args()
@@ -39,15 +40,14 @@ def main():
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     n_gpus = len(args.gpu.split(','))
 
-    code_dir = os.path.join(args.exp_dir, 'code')
+    # code_dir = os.path.join(args.exp_dir, 'code')
     ckpt_dir = os.path.join(args.exp_dir, 'ckpt')
     latest_ckpt = sorted(os.listdir(ckpt_dir), key=lambda s: int(s.split('-')[0].split('=')[1]), reverse=True)[0]
     latest_ckpt = os.path.join(ckpt_dir, latest_ckpt)
     config_path = os.path.join(args.exp_dir, 'config', 'parsed.yaml')
     
-    logging.info(f"Importing modules from cached code: {code_dir}")
-    sys.path.append(code_dir)
-    import datasets
+    # logging.info(f"Importing modules from cached code: {code_dir}")
+    # sys.path.append(code_dir)
     import systems
     import pytorch_lightning as pl
     from utils.misc import load_config    
@@ -55,6 +55,10 @@ def main():
     # parse YAML config to OmegaConf
     logging.info(f"Loading configuration: {config_path}")
     config = load_config(config_path, cli_args=extras)
+    
+    # Update level of ProgressiveBandHashGrid
+    if  config.model.geometry.xyz_encoding_config.otype == 'ProgressiveBandHashGrid':
+        config.model.geometry.xyz_encoding_config.start_level = config.model.geometry.xyz_encoding_config.n_levels
     config.cmd_args = vars(args)
     
     if 'seed' not in config:
@@ -69,13 +73,27 @@ def main():
         faces=mesh['t_pos_idx'].numpy()
     )
     
-    if args.decimate > 0:
-        logging.info("Decimating mesh.")
-        mesh = decimate_mesh(mesh, args.decimate)
+
+    # logging.info("Filtering mesh.")
+    # TODO: Filter mesh by select the max connected componects
+    # components = mesh.split(only_watertight=False)
+    # bbox = []
+    # for c in components:
+    #     bbmin = c.vertices.min(0)
+    #     bbmax = c.vertices.max(0)
+    #     bbox.append((bbmax - bbmin).max())
+    # max_component = np.argmax(bbox)
+    # mesh = components[max_component]
     
     os.makedirs(args.output_dir, exist_ok=True)
     logging.info("Exporting mesh.")
-    mesh.export(os.path.join(args.output_dir, 'iso_mesh.ply'))
+    mesh.export(os.path.join(args.output_dir, f'{config.name}.ply'))
+    
+    if args.decimate > 0:
+        logging.info("Decimating mesh.")
+        mesh = decimate_mesh(mesh, args.decimate)
+        mesh.export(os.path.join(args.output_dir, f'{config.name}_simplified.ply'))
+
     logging.info("Export finished successfully.")
     
 if __name__ == '__main__':
