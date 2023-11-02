@@ -34,7 +34,7 @@ python third_party/Vis-MVSNet/fusion.py --data $INPUT_DIR/dense/mvsnet_fusion \
 mvsnet_fusion_time=`date +"%Y-%m-%d %H:%M:%S"`
 
 echo "---angelo_recon---"
-python launch.py --config configs/neuralangelo-colmap_dense-SH.yaml --gpu 0 --train     dataset.root_dir=$INPUT_DIR
+python launch.py --config configs/neuralangelo-colmap_dense.yaml --gpu 0 --train     dataset.root_dir=$INPUT_DIR
 angelo_recon_time=`date +"%Y-%m-%d %H:%M:%S"`
 
 echo 'start time:' $starttime
