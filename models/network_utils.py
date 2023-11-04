@@ -51,6 +51,7 @@ class ProgressiveBandHashGrid(nn.Module):
         self.start_level, self.start_step, self.update_steps = config['start_level'], config['start_step'], config['update_steps']
         self.current_level = self.start_level
         self.mask = torch.zeros(self.n_level * self.n_features_per_level, dtype=torch.float32, device=get_rank())
+        self.mask[:self.current_level * self.n_features_per_level] = 1.
 
     def forward(self, x):
         enc = self.encoding(x)

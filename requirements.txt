@@ -6,7 +6,7 @@ opencv-python
 imageio
 imageio-ffmpeg
 scipy
-PyMCubes
+CuMCubes
 pyransac3d
 torch_efficient_distloss
 tensorboard
