@@ -47,7 +47,6 @@ class VolumeDualColor(nn.Module):
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
         self.encoding = encoding
         self.network = network
-        self.diffuse_only = False
     def forward(self, features, dirs, *args):
         dirs = (dirs + 1.) / 2. # (-1, 1) => (0, 1)
         dirs_embd = self.encoding(dirs.view(-1, self.n_dir_dims))
@@ -59,7 +58,6 @@ class VolumeDualColor(nn.Module):
         return color
 
     def update_step(self, epoch, global_step):
-        self.diffuse_only = global_step < self.config.get('diffuse_warmup_steps', 0)
         update_module_step(self.encoding, epoch, global_step)
 
     def regularizations(self, out):

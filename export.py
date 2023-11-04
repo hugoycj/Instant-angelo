@@ -9,30 +9,14 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
-def decimate_mesh(mesh: str, decimation_factor: float):
-    logging.info(f"Original mesh with {len(mesh.faces)} faces.")
-
-    # Decimate the mesh
-    if decimation_factor < 1:
-        decimation_factor = int(len(mesh.faces) * decimation_factor)
-    else:
-        decimation_factor = int(decimation_factor)
-
-    mesh = mesh.simplify_quadratic_decimation(decimation_factor)
-    logging.info(f"Decimated mesh to {len(mesh.faces)} faces.")
-
-    return mesh
     
 def main():
     logging.info("Start exporting.")
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', default='0', help='GPU(s) to be used')
     parser.add_argument('--exp_dir', required=True)
+    parser.add_argument('--res', default=1024)
     parser.add_argument('--output-dir', default='results')
-
-    parser.add_argument('--decimate', default=0.05, type=float, help='Specifies the desired final size of the mesh. \
-                        If the number is less than 1, it represents the final size as a percentage of the initial size. \
-                        If the number is greater than 1, it represents the desired number of faces.')
     args, extras = parser.parse_known_args()
 
     # set CUDA_VISIBLE_DEVICES then import pytorch-lightning
@@ -59,6 +43,8 @@ def main():
     # Update level of ProgressiveBandHashGrid
     if  config.model.geometry.xyz_encoding_config.otype == 'ProgressiveBandHashGrid':
         config.model.geometry.xyz_encoding_config.start_level = config.model.geometry.xyz_encoding_config.n_levels
+    config.model.geometry.isosurface.resolution = args.res
+    config.export.export_vertex_color = True
     config.cmd_args = vars(args)
     
     if 'seed' not in config:
@@ -67,33 +53,26 @@ def main():
     logging.info(f"Creating system: {config.system.name}")
     system = systems.make(config.system.name, config, load_from_checkpoint=latest_ckpt)
     system.model.cuda()
-    mesh = system.model.isosurface()
-    mesh = trimesh.Trimesh(
-        vertices=mesh['v_pos'].numpy(),
-        faces=mesh['t_pos_idx'].numpy()
-    )
+    mesh = system.model.export(config.export)
     
-
-    # logging.info("Filtering mesh.")
-    # TODO: Filter mesh by select the max connected componects
-    # components = mesh.split(only_watertight=False)
-    # bbox = []
-    # for c in components:
-    #     bbmin = c.vertices.min(0)
-    #     bbmax = c.vertices.max(0)
-    #     bbox.append((bbmax - bbmin).max())
-    # max_component = np.argmax(bbox)
-    # mesh = components[max_component]
+    mesh['v_pos'] = mesh['v_pos'][:, [0, 2, 1]].numpy()
+    mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
+    
+    mesh = trimesh.Trimesh(
+            vertices=mesh['v_pos'],
+            faces=mesh['t_pos_idx'],
+            vertex_colors=mesh['v_rgb'].numpy(),
+            vertex_normals=mesh['v_norm'].numpy()
+        )
+    mesh.visual.material = trimesh.visual.material.PBRMaterial(
+        metallicFactor=0.25,
+        roughnessFactor=0.25
+    )
     
     os.makedirs(args.output_dir, exist_ok=True)
     logging.info("Exporting mesh.")
-    mesh.export(os.path.join(args.output_dir, f'{config.name}.ply'))
-    
-    if args.decimate > 0:
-        logging.info("Decimating mesh.")
-        mesh = decimate_mesh(mesh, args.decimate)
-        mesh.export(os.path.join(args.output_dir, f'{config.name}_LOD.ply'))
-
+    mesh.export(os.path.join(args.output_dir, f'{config.name}.glb'))
+    mesh.export(os.path.join(args.output_dir, f'{config.name}.obj'))
     logging.info("Export finished successfully.")
     
 if __name__ == '__main__':

@@ -310,10 +310,11 @@ class NeuSModel(BaseModel):
     def export(self, export_config):
         mesh = self.isosurface()
         if export_config.export_vertex_color:
-            _, sdf_grad, feature = chunk_batch(self.geometry, export_config.chunk_size, False, mesh['v_pos'].to(self.rank), with_grad=True, with_feature=True)
+            _, sdf_grad, features = chunk_batch(self.geometry, export_config.chunk_size, False, mesh['v_pos'].to(self.rank), with_grad=True, with_feature=True)
             normal = F.normalize(sdf_grad, p=2, dim=-1)
-            rgb = self.texture(feature, -normal, normal) # set the viewing directions to the normal to get "albedo"
-            mesh['v_rgb'] = rgb.cpu()
+            base_color = torch.sigmoid(features[..., 1:4])
+            mesh['v_rgb'] = base_color.cpu()
+            mesh['v_norm'] = normal.cpu()
         return mesh
 
 @models.register('sh-neus')
