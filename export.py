@@ -15,6 +15,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', default='0', help='GPU(s) to be used')
     parser.add_argument('--exp_dir', required=True)
+    parser.add_argument('--flip', action='store_true')
     parser.add_argument('--res', default=1024)
     parser.add_argument('--output-dir', default='results')
     args, extras = parser.parse_known_args()
@@ -56,7 +57,10 @@ def main():
     mesh = system.model.export(config.export)
     
     mesh['v_pos'] = mesh['v_pos'][:, [0, 2, 1]].numpy()
-    mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
+    if args.flip:
+        mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
+    else:
+        mesh['t_pos_idx'] = mesh['t_pos_idx'].numpy()[:, [0, 2, 1]]
     
     mesh = trimesh.Trimesh(
             vertices=mesh['v_pos'],
