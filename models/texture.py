@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 import models
-from models.utils import get_activation
+from models.utils import get_activation, reflect, generate_ide_fn
 from models.network_utils import get_encoding, get_mlp
 from systems.utils import update_module_step
 from pytorch_lightning.utilities.rank_zero import rank_zero_info
@@ -59,6 +59,34 @@ class VolumeDualColor(nn.Module):
 
     def update_step(self, epoch, global_step):
         update_module_step(self.encoding, epoch, global_step)
+
+    def regularizations(self, out):
+        return {}
+
+
+@models.register('volume-dual-colorV2')
+class VolumeDualColorV2(nn.Module):
+    def __init__(self, config):
+        super(VolumeDualColorV2, self).__init__()
+        self.config = config
+        self.n_output_dims = 3
+        import numpy as np
+        self.dir_enc_fn = generate_ide_fn(5)
+        num_sh = (2 ** np.arange(5) + 1).sum() * 2
+        self.n_input_dims = self.config.input_feature_dim + num_sh
+        network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
+        self.network = network
+        
+    def forward(self, features, dirs, normals):
+        roughness = get_activation(self.config.color_activation)(features[..., 5:6])        
+        dirs_emb = self.dir_enc_fn(dirs, roughness)
+        network_inp = torch.cat([features.view(-1, features.shape[-1]), dirs_emb] + [normals.view(-1, normals.shape[-1])], dim=-1)
+        color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
+        if 'color_activation' in self.config:
+            basecolor = get_activation(self.config.color_activation)(features[..., 1:4])
+            color = get_activation(self.config.color_activation)(color) + basecolor
+        return color
+
 
     def regularizations(self, out):
         return {}
