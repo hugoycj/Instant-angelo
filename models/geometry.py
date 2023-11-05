@@ -30,7 +30,9 @@ def contract_to_unisphere(x, radius, contraction_type):
         raise NotImplementedError
     return x
 
-
+'''
+Modified from https://github.com/NVlabs/neuralangelo/blob/main/projects/neuralangelo/scripts/extract_mesh.py
+'''
 class MarchingCubeHelper(nn.Module):
     def __init__(self, sdf_func, bounds, resolution, block_res=128, method='mc'):
         super().__init__()
