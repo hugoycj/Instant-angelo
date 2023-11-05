@@ -314,7 +314,6 @@ class ColmapDatasetBase():
         self.all_points = self.all_points.float()
         self.pts3d_normal = self.pts3d_normal.float()
         self.all_points_ = contract_to_unisphere(self.all_points, 1.0, ContractionType.AABB) # points normalized to (0, 1)
-        self.all_fg_indexs, self.all_bg_indexs = self.all_fg_indexs.to(self.rank), self.all_bg_indexs.to(self.rank)
 
     def query_radius_occ(self, query_points, radius=0.01):
         
