@@ -32,9 +32,13 @@ def contract_to_unisphere(x, radius, contraction_type):
 
 
 class MarchingCubeHelper(nn.Module):
-    def __init__(self, resolution, method='mc'):
+    def __init__(self, sdf_func, bounds, resolution, block_res=128, method='mc'):
         super().__init__()
+        self.sdf_func = sdf_func
+        self.bounds = bounds
         self.resolution = resolution
+        self.intv = 2.0 / self.resolution
+        self.block_res = block_res
         self.points_range = (0, 1)
         self.method = method
         try:
@@ -42,14 +46,26 @@ class MarchingCubeHelper(nn.Module):
         except:
             print("Cannot find cuda accelerated marching cube, downgraded to cpu version!")
             self.method = 'mc'
-
-        if method == 'CuMCubes':
+ 
+        if self.method == 'CuMCubes':
             self.mc_func = cumcubes.marching_cubes
         else:
             import mcubes
             self.mc_func = mcubes.marching_cubes
         self.verts = None
+        self._create_lattice_grid()
 
+    def _create_lattice_grid(self):
+        ((x_min, x_max), (y_min, y_max), (z_min, z_max)) = self.bounds
+        self.x_grid = torch.arange(x_min, x_max, self.intv)
+        self.y_grid = torch.arange(y_min, y_max, self.intv)
+        self.z_grid = torch.arange(z_min, z_max, self.intv)
+        res_x, res_y, res_z = len(self.x_grid), len(self.y_grid), len(self.z_grid)
+        print("Extracting surface at resolution", res_x, res_y, res_z)
+        self.num_blocks_x = int(np.ceil(res_x / self.block_res))
+        self.num_blocks_y = int(np.ceil(res_y / self.block_res))
+        self.num_blocks_z = int(np.ceil(res_z / self.block_res))
+        
     def grid_vertices(self):
         if self.verts is None:
             x, y, z = torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution)
@@ -58,108 +74,51 @@ class MarchingCubeHelper(nn.Module):
             self.verts = verts
         return self.verts
 
-    def forward(self, level, threshold=0.):
-        level = level.float().view(self.resolution, self.resolution, self.resolution)
+    def forward_(self, level, threshold=0.):
         if self.method == 'CuMCubes':
             verts, faces = self.mc_func(-level.to(get_rank()), threshold)
             verts, faces = verts.cpu(), faces.cpu().long()
         else:
-            verts, faces = self.mc_func(-level.numpy(), threshold) # transform to numpy
+            verts, faces = self.mc_func(-level.cpu().numpy(), threshold) # transform to numpy
             verts, faces = torch.from_numpy(verts.astype(np.float32)), torch.from_numpy(faces.astype(np.int64)) # transform back to pytorch
-        verts = verts / (self.resolution - 1.)
-        return {
-            'v_pos': verts,
-            't_pos_idx': faces
-        }
-
-class LatticeGrid(torch.utils.data.Dataset):
-
-    def __init__(self, bounds, intv, block_res=64):
-        super().__init__()
-        self.block_res = block_res
-        ((x_min, x_max), (y_min, y_max), (z_min, z_max)) = bounds
-        self.x_grid = torch.arange(x_min, x_max, intv)
-        self.y_grid = torch.arange(y_min, y_max, intv)
-        self.z_grid = torch.arange(z_min, z_max, intv)
-        res_x, res_y, res_z = len(self.x_grid), len(self.y_grid), len(self.z_grid)
-        print("Extracting surface at resolution", res_x, res_y, res_z)
-        self.num_blocks_x = int(np.ceil(res_x / block_res))
-        self.num_blocks_y = int(np.ceil(res_y / block_res))
-        self.num_blocks_z = int(np.ceil(res_z / block_res))
-
-    def __getitem__(self, idx):
-        # Keep track of sample index for convenience.
-        sample = dict(idx=idx)
-        block_idx_x = idx // (self.num_blocks_y * self.num_blocks_z)
-        block_idx_y = (idx // self.num_blocks_z) % self.num_blocks_y
-        block_idx_z = idx % self.num_blocks_z
-        xi = block_idx_x * self.block_res
-        yi = block_idx_y * self.block_res
-        zi = block_idx_z * self.block_res
-        x, y, z = torch.meshgrid(self.x_grid[xi:xi+self.block_res+1],
-                                 self.y_grid[yi:yi+self.block_res+1],
-                                 self.z_grid[zi:zi+self.block_res+1], indexing="ij")
-        xyz = torch.stack([x, y, z], dim=-1)
-        sample.update(xyz=xyz)
-        return sample
-
-    def __len__(self):
-        return self.num_blocks_x * self.num_blocks_y * self.num_blocks_z
+        return verts, faces
     
-
-def get_lattice_grid_loader(dataset, num_workers=8):
-    return torch.utils.data.DataLoader(
-        dataset,
-        batch_size=1,
-        shuffle=False,
-        pin_memory=True,
-        num_workers=num_workers,
-        drop_last=False
-    )
-
-def marching_cubes(sdf, xyz, intv, texture_func, filter_lcc):
-    # marching cubes
-    import cumcubes
-    V, F = cumcubes.marching_cubes(sdf, 0.001)
-    if V.shape[0] > 0:
-        V = V * intv + xyz[0, 0, 0]
-        if texture_func is not None:
-            C = texture_func(V)
-            mesh = trimesh.Trimesh(V, F, vertex_colors=C)
-        else:
-            mesh = trimesh.Trimesh(V.cpu().numpy(), F.cpu().numpy())
-        # mesh = filter_points_outside_bounding_sphere(mesh)
-        # mesh = filter_largest_cc(mesh) if filter_lcc else mesh
-    else:
-        mesh = trimesh.Trimesh()
-    return mesh
-
-@torch.no_grad()
-def extract_mesh(sdf_func, bounds, intv, block_res=128, texture_func=None, filter_lcc=False):
-    lattice_grid = LatticeGrid(bounds, intv=intv, block_res=block_res)
-    data_loader = get_lattice_grid_loader(lattice_grid)
-    mesh_blocks = []
-    from tqdm import tqdm
-    data_loader = tqdm(data_loader, leave=False)
-    for it, data in enumerate(data_loader):
-        xyz = data["xyz"][0]
-        xyz_cuda = xyz.cuda()
-        sdf_cuda = sdf_func(xyz_cuda)
-        mesh = marching_cubes(sdf_cuda, xyz_cuda, intv, texture_func, filter_lcc)
-        mesh_blocks.append(mesh)
-    mesh = trimesh.util.concatenate(mesh_blocks)
-    return {
+    def forward(self, threshold=0.):
+        mesh_blocks = []
+        for idx in range(self.num_blocks_x * self.num_blocks_y * self.num_blocks_z):
+            block_idx_x = idx // (self.num_blocks_y * self.num_blocks_z)
+            block_idx_y = (idx // self.num_blocks_z) % self.num_blocks_y
+            block_idx_z = idx % self.num_blocks_z
+            xi = block_idx_x * self.block_res
+            yi = block_idx_y * self.block_res
+            zi = block_idx_z * self.block_res
+            x, y, z = torch.meshgrid(self.x_grid[xi:xi+self.block_res+1],
+                                    self.y_grid[yi:yi+self.block_res+1],
+                                    self.z_grid[zi:zi+self.block_res+1], indexing="ij")
+            xyz = torch.stack([x, y, z], dim=-1)
+            sdf = self.sdf_func(xyz.cuda())
+            verts, faces = self.forward_(sdf, threshold)
+            if verts.shape[0] > 0:
+                verts = verts * self.intv + xyz[0, 0, 0]
+                mesh = trimesh.Trimesh(verts.cpu().numpy(), faces.cpu().numpy())
+            else:
+                mesh = trimesh.Trimesh()
+            mesh_blocks.append(mesh)
+        mesh = trimesh.util.concatenate(mesh_blocks)
+        return {
             'v_pos': torch.from_numpy(np.array(mesh.vertices)),
             't_pos_idx': torch.from_numpy(np.array(mesh.faces))
         }
 class BaseImplicitGeometry(BaseModel):
     def __init__(self, config):
         super().__init__(config)
-        if self.config.isosurface is not None:
-            assert self.config.isosurface.method in ['mc', 'CuMCubes']
-            self.helper = MarchingCubeHelper(self.config.isosurface.resolution, method=self.config.isosurface.method)
         self.radius = self.config.radius
         self.contraction_type = None # assigned in system
+        self.sdf_func = lambda x: -self.forward_level(x)
+        self.bounds = np.array([[-self.radius, self.radius], [-self.radius, self.radius], [-self.radius, self.radius]])
+        if self.config.isosurface is not None:
+            assert self.config.isosurface.method in ['mc', 'CuMCubes']
+            self.helper = MarchingCubeHelper(self.sdf_func, self.bounds, int(self.config.isosurface.resolution), method=self.config.isosurface.method)
 
     def forward_level(self, points):
         raise NotImplementedError
@@ -177,7 +136,6 @@ class BaseImplicitGeometry(BaseModel):
 
         bounds = np.array([[vmin[0], vmax[0]], [vmin[1], vmax[1]], [vmin[2], vmax[2]]])
         sdf_func = lambda x: -self.forward_level(x)
-        mesh = extract_mesh(sdf_func=sdf_func, bounds=bounds, intv=(2.0 / self.config.isosurface.resolution))
 
         return mesh
 
@@ -185,7 +143,7 @@ class BaseImplicitGeometry(BaseModel):
     def isosurface(self):
         if self.config.isosurface is None:
             raise NotImplementedError
-        mesh = self.isosurface_((-self.radius, -self.radius, -self.radius), (self.radius, self.radius, self.radius))
+        mesh = self.helper(threshold=0.001)
         return mesh
 
 
