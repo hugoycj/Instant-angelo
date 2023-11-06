@@ -73,8 +73,8 @@ model:
       otype: VanillaMLP
       activation: ReLU
       output_activation: none
-      n_neurons: 64
-      n_hidden_layers: 2
+      n_neurons: 256
+      n_hidden_layers: 4
     color_activation: sigmoid
   # background model configurations
   num_samples_per_ray_bg: 256
@@ -119,13 +119,13 @@ model:
 system:
   name: neus-system
   loss:
-    lambda_sdf_l1: [0, 1, 0, 20000]
+    lambda_sdf_l1: 0
     lambda_normal: 0.
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_curvature: [0, 0, 5.e-1, 5000]
+    lambda_curvature: [0, 0, 5.e-2, 5000]
     lambda_sparsity: 0.0
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0

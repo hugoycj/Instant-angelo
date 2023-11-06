@@ -69,18 +69,37 @@ class VolumeDualColorV2(nn.Module):
     def __init__(self, config):
         super(VolumeDualColorV2, self).__init__()
         self.config = config
+        self.n_dir_dims = self.config.get('n_dir_dims', 3)
         self.n_output_dims = 3
-        import numpy as np
-        self.dir_enc_fn = generate_ide_fn(5)
-        num_sh = (2 ** np.arange(5) + 1).sum() * 2
-        self.n_input_dims = self.config.input_feature_dim + num_sh
+        
+        self.use_ide = False
+        if self.use_ide:
+            import numpy as np
+            self.encoding = generate_ide_fn(5)
+            num_sh = (2 ** np.arange(5) + 1).sum() * 2
+            self.n_input_dims = self.config.input_feature_dim + num_sh
+        else:
+            self.encoding = get_encoding(self.n_dir_dims, self.config.dir_encoding_config)
+            self.n_input_dims = self.config.input_feature_dim + self.encoding.n_output_dims
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
         self.network = network
+
+    def forward(self, features, viewdirs, normals):
         
-    def forward(self, features, dirs, normals):
-        roughness = get_activation(self.config.color_activation)(features[..., 5:6])        
-        dirs_emb = self.dir_enc_fn(dirs, roughness)
-        network_inp = torch.cat([features.view(-1, features.shape[-1]), dirs_emb] + [normals.view(-1, normals.shape[-1])], dim=-1)
+        VdotN = (-viewdirs * normals).sum(-1, keepdim=True)
+        refdirs = 2 * VdotN * normals + viewdirs
+        
+        if self.use_ide:
+            tint = get_activation(self.config.color_activation)(features[..., 4:5])
+            roughness = get_activation(self.config.color_activation)(features[..., 5:6])
+            
+            refdirs = (refdirs + 1.) / 2. # (-1, 1) => (0, 1)
+            refdirs_embd = self.encoding(refdirs, roughness)
+        else:
+            refdirs = (refdirs + 1.) / 2. # (-1, 1) => (0, 1)
+            refdirs_embd = self.encoding(refdirs.view(-1, self.n_dir_dims))
+            
+        network_inp = torch.cat([features.view(-1, features.shape[-1]), refdirs_embd] + [normals.view(-1, normals.shape[-1])] , dim=-1)
         color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
         if 'color_activation' in self.config:
             basecolor = get_activation(self.config.color_activation)(features[..., 1:4])
