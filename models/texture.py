@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 import models
-from models.utils import get_activation
+from models.utils import get_activation, reflect, generate_ide_fn
 from models.network_utils import get_encoding, get_mlp
 from systems.utils import update_module_step
 from pytorch_lightning.utilities.rank_zero import rank_zero_info
@@ -47,7 +47,6 @@ class VolumeDualColor(nn.Module):
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
         self.encoding = encoding
         self.network = network
-        self.diffuse_only = False
     def forward(self, features, dirs, *args):
         dirs = (dirs + 1.) / 2. # (-1, 1) => (0, 1)
         dirs_embd = self.encoding(dirs.view(-1, self.n_dir_dims))
@@ -59,8 +58,54 @@ class VolumeDualColor(nn.Module):
         return color
 
     def update_step(self, epoch, global_step):
-        self.diffuse_only = global_step < self.config.get('diffuse_warmup_steps', 0)
         update_module_step(self.encoding, epoch, global_step)
+
+    def regularizations(self, out):
+        return {}
+
+
+@models.register('volume-dual-colorV2')
+class VolumeDualColorV2(nn.Module):
+    def __init__(self, config):
+        super(VolumeDualColorV2, self).__init__()
+        self.config = config
+        self.n_dir_dims = self.config.get('n_dir_dims', 3)
+        self.n_output_dims = 3
+        
+        self.use_ide = False
+        if self.use_ide:
+            import numpy as np
+            self.encoding = generate_ide_fn(5)
+            num_sh = (2 ** np.arange(5) + 1).sum() * 2
+            self.n_input_dims = self.config.input_feature_dim + num_sh
+        else:
+            self.encoding = get_encoding(self.n_dir_dims, self.config.dir_encoding_config)
+            self.n_input_dims = self.config.input_feature_dim + self.encoding.n_output_dims
+        network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
+        self.network = network
+
+    def forward(self, features, viewdirs, normals):
+        
+        VdotN = (-viewdirs * normals).sum(-1, keepdim=True)
+        refdirs = 2 * VdotN * normals + viewdirs
+        
+        if self.use_ide:
+            tint = get_activation(self.config.color_activation)(features[..., 4:5])
+            roughness = get_activation(self.config.color_activation)(features[..., 5:6])
+            
+            refdirs = (refdirs + 1.) / 2. # (-1, 1) => (0, 1)
+            refdirs_embd = self.encoding(refdirs, roughness)
+        else:
+            refdirs = (refdirs + 1.) / 2. # (-1, 1) => (0, 1)
+            refdirs_embd = self.encoding(refdirs.view(-1, self.n_dir_dims))
+            
+        network_inp = torch.cat([features.view(-1, features.shape[-1]), refdirs_embd] + [normals.view(-1, normals.shape[-1])] , dim=-1)
+        color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
+        if 'color_activation' in self.config:
+            basecolor = get_activation(self.config.color_activation)(features[..., 1:4])
+            color = get_activation(self.config.color_activation)(color) + basecolor
+        return color
+
 
     def regularizations(self, out):
         return {}

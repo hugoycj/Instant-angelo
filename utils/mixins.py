@@ -208,16 +208,18 @@ class SaverMixin():
             imgs = [cv2.cvtColor(i, cv2.COLOR_BGR2RGB) for i in imgs]
             imageio.mimsave(self.get_save_path(filename), imgs, fps=fps)
     
-    def save_mesh(self, filename, v_pos, t_pos_idx, v_tex=None, t_tex_idx=None, v_rgb=None):
+    def save_mesh(self, filename, v_pos, t_pos_idx, v_tex=None, t_tex_idx=None, v_rgb=None, v_norm=None):
         v_pos, t_pos_idx = self.convert_data(v_pos), self.convert_data(t_pos_idx)
         if v_rgb is not None:
             v_rgb = self.convert_data(v_rgb)
-
+        if v_norm is not None:
+            v_norm = self.convert_data(v_rgb)
         import trimesh
         mesh = trimesh.Trimesh(
             vertices=v_pos,
             faces=t_pos_idx,
-            vertex_colors=v_rgb
+            vertex_colors=v_rgb,
+            vertex_normals=v_norm
         )
         mesh.export(self.get_save_path(filename))
     

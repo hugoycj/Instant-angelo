@@ -8,7 +8,7 @@ dataset:
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
-  n_test_traj_steps: 30
+  n_test_traj_steps: 6
   apply_mask: false
   load_data_on_gpu: false
   dense_pcd_path: null
@@ -176,8 +176,8 @@ trainer:
   max_steps: 20000
   log_every_n_steps: 100
   num_sanity_val_steps: 0
-  val_check_interval: 5000
+  val_check_interval: 10000
   limit_train_batches: 1.0
-  limit_val_batches: 2
+  limit_val_batches: 1
   enable_progress_bar: true
   precision: 16
