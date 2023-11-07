@@ -58,9 +58,9 @@ def main():
     
     mesh['v_pos'] = mesh['v_pos'][:, [0, 2, 1]].numpy()
     if args.flip:
-        mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
-    else:
         mesh['t_pos_idx'] = mesh['t_pos_idx'].numpy()[:, [0, 2, 1]]
+    else:
+        mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
     
     mesh = trimesh.Trimesh(
             vertices=mesh['v_pos'],
