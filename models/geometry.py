@@ -12,22 +12,19 @@ from models.utils import scale_anything, get_activation, cleanup, chunk_batch
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
 from utils.misc import get_rank
 from systems.utils import update_module_step
-from nerfacc import ContractionType
 
 import trimesh
 
 def contract_to_unisphere(x, radius, contraction_type):
-    if contraction_type == ContractionType.AABB:
+    if contraction_type == 'AABB':
         x = scale_anything(x, (-radius, radius), (0, 1))
-    elif contraction_type == ContractionType.UN_BOUNDED_SPHERE:
+    else:
         x = scale_anything(x, (-radius, radius), (0, 1))
         x = x * 2 - 1  # aabb is at [-1, 1]
         mag = x.norm(dim=-1, keepdim=True)
         mask = mag.squeeze(-1) > 1
         x[mask] = (2 - 1 / mag[mask]) * (x[mask] / mag[mask])
         x = x / 4 + 0.5  # [-inf, inf] is at [0, 1]
-    else:
-        raise NotImplementedError
     return x
 
 '''

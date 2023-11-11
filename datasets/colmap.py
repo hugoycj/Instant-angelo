@@ -138,11 +138,10 @@ def create_spheric_poses(cameras, n_steps=120):
     return all_c2w
 
 from models.utils import scale_anything
-from nerfacc import ContractionType
 def contract_to_unisphere(x, radius, contraction_type):
-    if contraction_type == ContractionType.AABB:
+    if contraction_type =='AABB':
         x = scale_anything(x, (-radius, radius), (0, 1))
-    elif contraction_type == ContractionType.UN_BOUNDED_SPHERE:
+    elif contraction_type == 'UN_BOUNDED_SPHERE':
         x = scale_anything(x, (-radius, radius), (0, 1))
         x = x * 2 - 1  # aabb is at [-1, 1]
         mag = x.norm(dim=-1, keepdim=True)
@@ -319,7 +318,7 @@ class ColmapDatasetBase():
         self.all_points_confidence = self.all_points_confidence.float()
         self.all_points = self.all_points.float()
         self.pts3d_normal = self.pts3d_normal.float()
-        self.all_points_ = contract_to_unisphere(self.all_points, 1.0, ContractionType.AABB) # points normalized to (0, 1)
+        self.all_points_ = contract_to_unisphere(self.all_points, 1.0, 'AABB') # points normalized to (0, 1)
 
     def query_radius_occ(self, query_points, radius=0.01):
         
