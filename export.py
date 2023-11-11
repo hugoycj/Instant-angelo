@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--flip', action='store_true')
     parser.add_argument('--res', default=1024)
     parser.add_argument('--output-dir', default='results')
+    parser.add_argument('--export-data', action='store_true')
     args, extras = parser.parse_known_args()
 
     # set CUDA_VISIBLE_DEVICES then import pytorch-lightning
@@ -31,8 +32,6 @@ def main():
     latest_ckpt = os.path.join(ckpt_dir, latest_ckpt)
     config_path = os.path.join(args.exp_dir, 'config', 'parsed.yaml')
     
-    # logging.info(f"Importing modules from cached code: {code_dir}")
-    # sys.path.append(code_dir)
     import systems
     import pytorch_lightning as pl
     from utils.misc import load_config    
@@ -41,6 +40,14 @@ def main():
     logging.info(f"Loading configuration: {config_path}")
     config = load_config(config_path, cli_args=extras)
     
+    args.output_dir = os.path.join(args.output_dir, config.name)
+    if args.export_data:
+        import datasets
+        dm = datasets.make(config.dataset.name, config.dataset)
+        dm.setup(stage='predict')
+        dm.export(args.output_dir)
+        logging.info("Data Export finished successfully.")
+        
     # Update level of ProgressiveBandHashGrid
     if  config.model.geometry.xyz_encoding_config.otype == 'ProgressiveBandHashGrid':
         config.model.geometry.xyz_encoding_config.start_level = config.model.geometry.xyz_encoding_config.n_levels

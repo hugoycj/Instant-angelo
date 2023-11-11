@@ -2,6 +2,8 @@ import os
 import math
 import numpy as np
 from PIL import Image
+import cv2
+import json
 
 import torch
 import torch.nn.functional as F
@@ -273,6 +275,10 @@ class ColmapDatasetBase():
             ColmapDatasetBase.properties = {
                 'w': w,
                 'h': h,
+                'fx': fx,
+                'fy': fy,
+                'cx': cx,
+                'cy': cy,
                 'img_wh': img_wh,
                 'factor': factor,
                 'has_mask': has_mask,
@@ -368,6 +374,50 @@ class ColmapDataModule(pl.LightningDataModule):
     def prepare_data(self):
         pass
     
+    def export(self, export_dir: str):
+        """
+        Export all_c2w, all_images, all_fg_masks, and K to the specified directory.
+
+        Args:
+            export_dir (str): The directory where the exported files will be saved.
+        """
+        transformed_data = {
+            "w": self.predict_dataset.w,
+            "h": self.predict_dataset.h,
+            "fl_x": self.predict_dataset.fx,
+            "fl_y": self.predict_dataset.fy,
+            "cx": self.predict_dataset.cx,
+            "cy": self.predict_dataset.cy,
+            "k1": 0,
+            "k2": 0,
+            "p1": 0,
+            "p2": 0,
+            "camera_model": "OPENCV",
+            "frames": []
+        }
+        # save images, poses, intrinsics
+        os.makedirs(f'{export_dir}/images', exist_ok=True)
+        
+        for _id  in range(len(self.predict_dataset.all_images)):
+            pose = self.predict_dataset.all_c2w[_id].cpu().numpy()
+            # pad the pose from [3, 4] to [4, 4]
+            if pose.shape[0] == 3:
+                pose = np.concatenate([pose, np.array([[0,0,0,1]])], axis=0)
+            image = self.predict_dataset.all_images[_id].cpu().numpy() * 255
+            image = image[...,::-1]
+            image = image.astype(np.uint8)
+            image_path = '%s/images/%05d.png'%(export_dir,_id)
+            cv2.imwrite(image_path, image)
+            
+            transformed_frame = {
+                "file_path": "images/%05d.png"%_id,
+                "transform_matrix": pose.tolist(),
+            }
+            transformed_data['frames'].append(transformed_frame)
+        output_data_path = os.path.join(export_dir, 'transforms.json')
+        with open(output_data_path, 'w') as f:
+            f.write(json.dumps(transformed_data, indent=4))
+
     def general_loader(self, dataset, batch_size):
         sampler = None
         return DataLoader(
