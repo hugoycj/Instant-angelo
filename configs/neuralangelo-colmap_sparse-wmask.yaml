@@ -5,7 +5,7 @@ seed: 42
 dataset:
   name: colmap
   root_dir: ???
-  img_downscale: 2 # specify training image size by either img_wh or img_downscale
+  img_downscale: 1 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
   n_test_traj_steps: 30
@@ -18,7 +18,7 @@ model:
   name: neus
   radius: 1.5
   num_samples_per_ray: 1024
-  train_num_rays: 128
+  train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
   grid_prune_occ_thre: 0.001
