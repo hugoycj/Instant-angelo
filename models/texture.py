@@ -53,7 +53,7 @@ class VolumeDualColor(nn.Module):
         network_inp = torch.cat([features.view(-1, features.shape[-1]), dirs_embd] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
         color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
         if 'color_activation' in self.config:
-            basecolor = get_activation(self.config.color_activation)(features[..., 1:4])
+            basecolor = get_activation(self.config.color_activation)(features[..., :3])
             color = get_activation(self.config.color_activation)(color) + basecolor
         return color
 
@@ -102,7 +102,7 @@ class VolumeDualColorV2(nn.Module):
         network_inp = torch.cat([features.view(-1, features.shape[-1]), refdirs_embd] + [normals.view(-1, normals.shape[-1])] , dim=-1)
         color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
         if 'color_activation' in self.config:
-            basecolor = get_activation(self.config.color_activation)(features[..., 1:4])
+            basecolor = get_activation(self.config.color_activation)(features[..., :3])
             color = get_activation(self.config.color_activation)(color) + basecolor
         return color
 
