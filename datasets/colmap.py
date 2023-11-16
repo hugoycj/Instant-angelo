@@ -28,6 +28,16 @@ def get_center(pts):
     center = pts[valid].mean(0)
     return center
 
+def get_center_and_scale(pts):
+    center = pts.mean(0)
+    dis = (pts - center[None,:]).norm(p=2, dim=-1)
+    mean, std = dis.mean(), dis.std()
+    q25, q75 = torch.quantile(dis, 0.25), torch.quantile(dis, 0.75)
+    valid = (dis > mean - 1.5 * std) & (dis < mean + 1.5 * std) & (dis > mean - (q75 - q25) * 1.5) & (dis < mean + (q75 - q25) * 1.5)
+    center = pts[valid].mean(0)
+    scale = pts[valid].norm(p=2, dim=-1).max()
+    return center, scale
+
 def normalize_poses(poses, pts, up_est_method, center_est_method, pts3d_normal=None):
     if center_est_method == 'camera':
         # estimation scene center as the average of all camera positions
@@ -82,13 +92,12 @@ def normalize_poses(poses, pts, up_est_method, center_est_method, pts3d_normal=N
         # translation and scaling
         poses_min, poses_max = poses_norm[...,3].min(0)[0], poses_norm[...,3].max(0)[0]
         pts_fg = pts[(poses_min[0] < pts[:,0]) & (pts[:,0] < poses_max[0]) & (poses_min[1] < pts[:,1]) & (pts[:,1] < poses_max[1])]
-        center = get_center(pts_fg)
+        center, scale = get_center_and_scale(pts_fg)
         tc = center.reshape(3, 1)
         t = -tc
         poses_homo = torch.cat([poses_norm, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses_norm.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([torch.eye(3), t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
         poses_norm = (inv_trans @ poses_homo)[:,:3]
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
         poses_norm[...,3] /= scale
         pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
         # apply the rotation to the point cloud normal
