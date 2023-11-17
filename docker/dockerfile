@@ -19,15 +19,17 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 # Create a virtual environment
 RUN python3 -m venv /opt/venv
 
-COPY requirements.txt .
 
 # Install packages into the virtual environment
-RUN /opt/venv/bin/pip install --upgrade pip -i http://mirrors.aliyun.com/pypi/simple && \
-    /opt/venv/bin/pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118 && \
+RUN /opt/venv/bin/pip install --upgrade pip -i http://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com && \
+    /opt/venv/bin/pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 -i http://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com  && \
     /opt/venv/bin/pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch && \
     /opt/venv/bin/pip install ninja imageio imageio-ffmpeg trimesh && \
-    /opt/venv/bin/pip install -r requirements.txt && \
     # Clean up in the same RUN instruction
+    rm -r ~/.cache/pip
+
+COPY requirements.txt . 
+RUN /opt/venv/bin/pip install -r requirements.txt -i http://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com && \
     rm -r ~/.cache/pip
 
 # Make the virtual environment the default Python runtime
@@ -43,3 +45,4 @@ ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 ENV PYOPENGL_PLATFORM egl
 
 COPY 10_nvidia.json /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+RUN python -m nerfacc.cuda._backend
