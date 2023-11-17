@@ -183,12 +183,12 @@ class VolumeSDF(BaseImplicitGeometry):
                 n_input_dims=3,
                 encoding_config={
                 "otype": "OneBlob", #Component type.
-	            "n_bins": 32
+	            "n_bins": 16
                 },
                 dtype=torch.float
             )
         network = get_mlp(encoding.n_output_dims, 1, self.config.mlp_network_config)
-        diffuse_network = get_mlp(encoding.n_output_dims + pos_encoding.n_output_dims, self.n_output_dims - pos_encoding.n_output_dims, self.config.mlp_network_config)
+        diffuse_network = get_mlp(encoding.n_output_dims + pos_encoding.n_output_dims, self.n_output_dims, self.config.mlp_network_config)
         self.encoding, self.network = encoding, network
         self.diffuse_network = diffuse_network
         self.pos_encoding = pos_encoding
@@ -279,7 +279,6 @@ class VolumeSDF(BaseImplicitGeometry):
             pos_encoding = self.pos_encoding(points_)
             hash_encoding = self.encoding(points.view(-1, 3),  False)
             feature = self.diffuse_network(torch.cat([hash_encoding, pos_encoding], dim=-1))
-            feature = torch.cat([feature, pos_encoding], dim=-1)
             if 'feature_activation' in self.config:
                 feature = get_activation(self.config.feature_activation)(feature)
             rv.append(feature)
