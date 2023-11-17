@@ -34,7 +34,7 @@ model:
   geometry:
     name: volume-sdf
     radius: ${model.radius}
-    feature_dim: 65
+    feature_dim: 64
     grad_type: analytic
     finite_difference_eps: progressive
     isosurface:
@@ -49,7 +49,7 @@ model:
       log2_hashmap_size: 19
       base_resolution: 32
       per_level_scale: 1.3195079107728942
-      include_xyz: true
+      include_xyz: false
       start_level: 4
       start_step: 5000
       update_steps: 1000
