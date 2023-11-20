@@ -43,9 +43,9 @@ The first line runs the colmap reconstruction script with full image. The second
 
 ## Start Reconstruction!
 ### Run Smooth Surface Reconstruction in 20 Minutes
+<img src="assets/nsr2angelo.png">
 <details>
 <summary>[Click to expand]</summary>
-<img src="assets/nsr2angelo.png">
 The smooth reconstruction mode is well-suited for the following cases:
 
 * When reconstructing a smooth object that does not have a high level of detail. The smooth mode works best for objects that have relatively simple, flowing surfaces without a lot of intricate features.
@@ -80,46 +80,21 @@ However, currently, SH-Neus is inferior to the original Neus with MLP in terms o
 
 </details>
 
-### Run Detail Surface Reconstruction in 1 Hour
-<details>
-<summary>[Click to expand]</summary>
-<img src="assets/sparse-50k.png">
-
-The detail reconstruction mode without additional preprocessing is optimal for scenarios with:
-* Image data captured under varying conditions over time or with inconsistent exposure levels. 
-* High resolution image sources of 2K or 4K dimensions.
-* Your images' resolution are 2K or 4K
-* Reconstructing objects or scenes comprised of glossy, reflective materials. 
-* Subjects containing large textureless or untextured surface regions.
-  
----
-
-**Information you need to know before you start**:
-* The detail reconstruction mode requires 2-3 times longer to complete compared to the smooth mode, owing to the use of a larger final hash grid resolution and more training steps.
-* For image inputs below 1K resolution, the detail mode may yield marginal improvements over other modes. Images under 1K likely do not provide sufficient information to take full advantage of the capabilities of detail reconstruction.
-  
----
-
-Now it is time to start by running:
-```
-bash run_neuralangelo-colmap_sparse-50k.sh  ${INPUT_DIR}
-```
-</details>
-
 ### Run Detail Surface Reconstruction in 20 Minutes
+![Snipaste_2023-11-20_11-22-10](https://github.com/hugoycj/Instant-angelo/assets/40767265/9043c87a-f4a2-4d6e-b543-47b8e56f6066)
+Many thanks to [youmi-zym](https://github.com/youmi-zym) for creating the image on Tanks and Temples.
 <details>
 <summary>[Click to expand]</summary>
 
 Generating high-fidelity surface reconstructions with only RGB inputs in 20,000 steps (around 20 minutes) is challenging, especially for sparse in-the-wild captures where occlusion and limited views make surface reconstruction an underconstrained problem. This can lead to optimization instability and difficulty converging. Introducing lidar, ToF depth, or predicted depth can help stabilize optimization and accelerate training. However, directly regularizing rendered depth is suboptimal due to bias introduced by density2sdf. Moreover, ensuring consistent depth across views is difficult, especially with lower-quality ToF sensors or predicted depth. We propose directly regularizing the SDF field using MVS point clouds and normals to alleviate the bias
 
 Importantly, in real-world scenarios like oblique photography and virtual tours, dense point clouds are already intermediate outputs. This allows directly utilizing the existing point clouds for regularization without extra computation. In such use cases, the point cloud prior comes for free as part of the capture process. 
-
 ---
 
 **Information you need to know before you start**:
 * An aligned dense point cloud with normal is necessary, you could specify the relative path at `dataset.dense_pcd_path` in the config file
 * The point cloud could be generated from various methods, either from traditional MVS like colmap or OpenMVS, or learning-based MVS method. You could even generate the point cloud using commercial photogrammetry software like metashape and DJI.
-  
+
 ---
 
 Now it is time to start by running:
