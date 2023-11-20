@@ -17,7 +17,7 @@ dataset:
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 1024
+  num_samples_per_ray: 512
   train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
@@ -64,12 +64,12 @@ model:
       sphere_init_radius: 0.5
       weight_norm: true
   texture:
-    name: volume-dual-colorV2
+    name: volume-progressive-SH
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
-    diffuse_warmup_steps: 5000 
-    dir_encoding_config:
-      otype: SphericalHarmonics
-      degree: 4
+    sh_level: 3
+    start_level: 1
+    start_step: 0
+    update_steps: 3000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -82,7 +82,7 @@ model:
 system:
   name: neus-system
   loss:
-    lambda_sdf_l1: [0, 1, 0, 20000]
+    lambda_sdf_l1: 0.
     lambda_normal: 0.
     lambda_rgb_mse: 0.
     lambda_rgb_l1: 1.
