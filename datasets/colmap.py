@@ -211,7 +211,7 @@ class ColmapDatasetBase():
                 cy = camdata[1].params[2] * factor
             else:
                 raise ValueError(f"Please parse the intrinsics for camera model {camdata[1].model}!")
-            
+            K = torch.tensor([[fx, 0, cx], [0, fy, cy], [0, 0, 1]]).T
             directions = get_ray_directions(w, h, fx, fy, cx, cy)
 
             imdata = read_images_binary(os.path.join(self.config.root_dir, 'sparse/0/images.bin'))
@@ -287,6 +287,7 @@ class ColmapDatasetBase():
                 'fy': fy,
                 'cx': cx,
                 'cy': cy,
+                'K': K,
                 'img_wh': img_wh,
                 'factor': factor,
                 'has_mask': has_mask,

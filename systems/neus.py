@@ -29,6 +29,13 @@ class NeuSSystem(BaseSystem):
         self.train_num_rays = self.config.model.train_num_rays
         self.sample_foreground_ratio = self.config.dataset.get('sample_foreground_ratio', 1.0)
 
+    def on_train_epoch_start(self):
+        self.dataset = self.trainer.datamodule.train_dataloader().dataset
+
+        # Trim occ
+        self.model.occupancy_grid.mark_invisible_cells(self.dataset.K[None].cuda().float(), self.dataset.all_c2w.cuda().float(), self.dataset.w, self.dataset.h)
+        
+        
     def forward(self, batch):
         return self.model(batch['rays'])
     
