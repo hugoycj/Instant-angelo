@@ -33,7 +33,13 @@ class NeuSSystem(BaseSystem):
         self.dataset = self.trainer.datamodule.train_dataloader().dataset
 
         # Trim occ
-        self.model.occupancy_grid.mark_invisible_cells(self.dataset.K[None].cuda().float(), self.dataset.all_c2w.cuda().float(), self.dataset.w, self.dataset.h)
+        # if self.dataset.apply_mask and hasattr(self.model.occupancy_grid, 'mark_invisible_cells_with_masks'):
+        #TODO: Fix mask trimming
+        if False:
+            self.model.occupancy_grid.mark_invisible_cells_with_masks(self.dataset.K[None].cuda().float(), self.dataset.all_c2w.cuda().float(), 
+                                                                      self.dataset.w, self.dataset.h, masks=self.dataset.all_fg_masks.cuda())            
+        else:
+            self.model.occupancy_grid.mark_invisible_cells(self.dataset.K[None].cuda().float(), self.dataset.all_c2w.cuda().float(), self.dataset.w, self.dataset.h)
         
         
     def forward(self, batch):
@@ -72,7 +78,7 @@ class NeuSSystem(BaseSystem):
             c2w = self.dataset.all_c2w[index]
             
             # sample the same number of points as the ray
-            pts_index = torch.randint(0, len(self.dataset.all_points), size=(self.train_num_rays,))
+            pts_index = torch.randint(0, len(self.dataset.all_points), size=(self.config.model.max_train_num_rays,))
             pts = self.dataset.all_points[pts_index]
             pts_weights = self.dataset.all_points_confidence[pts_index]
             if self.dataset.pts3d_normal is not None:
