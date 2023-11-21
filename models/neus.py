@@ -228,16 +228,17 @@ class NeuSModel(BaseModel):
         opacity = accumulate_along_rays(weights, ray_indices=ray_indices, values=None, n_rays=n_rays)
         depth = accumulate_along_rays(weights,  ray_indices=ray_indices, values=midpoints, n_rays=n_rays)
         comp_rgb = accumulate_along_rays(weights, ray_indices=ray_indices, values=rgb, n_rays=n_rays)
-
+        rays_valid = opacity > 0
         comp_normal = accumulate_along_rays(weights, ray_indices=ray_indices, values=normal, n_rays=n_rays)
         comp_normal = F.normalize(comp_normal, p=2, dim=-1)
-
+        comp_normal[~rays_valid[:, 0]] = 0
+        
         out = {
             'comp_rgb': comp_rgb,
             'comp_normal': comp_normal,
             'opacity': opacity,
             'depth': depth,
-            'rays_valid': opacity > 0,
+            'rays_valid': rays_valid,
             'num_samples': torch.as_tensor([len(t_starts)], dtype=torch.int32, device=rays.device)
         }
 
