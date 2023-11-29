@@ -9,7 +9,7 @@ from models.base import BaseModel
 from models.utils import chunk_batch
 from systems.utils import update_module_step
 from nerfacc import OccGridEstimator, render_weight_from_density, render_weight_from_alpha, accumulate_along_rays
-from nerfacc import ray_aabb_intersect
+from nerfacc import ray_aabb_intersect, RayIntervals, importance_sampling
 
 
 class VarianceNetwork(nn.Module):
@@ -203,13 +203,14 @@ class NeuSModel(BaseModel):
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
         with torch.no_grad():
-            ray_indices, t_starts, t_ends = self.occupancy_grid.sampling(
+            ray_indices, t_starts, t_ends, intervals= self.occupancy_grid.sampling(
                 rays_o, rays_d,
                 alpha_fn=None,
                 render_step_size=self.render_step_size,
                 stratified=self.randomized,
                 cone_angle=0.0,
-                alpha_thre=0.0
+                alpha_thre=0.0,
+                early_stop_eps=0.0
             )
         
         ray_indices = ray_indices.long()
@@ -218,7 +219,26 @@ class NeuSModel(BaseModel):
         midpoints = (t_starts + t_ends)[..., None] / 2.
         positions = t_origins + t_dirs * midpoints
         dists = t_ends - t_starts
-
+        # TODO: Fix hierarchical sampling
+        sdf = self.geometry(positions, with_grad=False, with_feature=False)
+        inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
+        inv_s = inv_s.expand(sdf.shape[0], 1)
+        estimated_next_sdf = sdf[...,None] - self.render_step_size * 0.5
+        estimated_prev_sdf = sdf[...,None] + self.render_step_size * 0.5
+        prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
+        next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
+        cdfs = torch.cat([prev_cdf, next_cdf], dim=-1)
+        intervals, _ = importance_sampling(intervals, cdfs, 7)
+        
+        t_starts = intervals.vals[intervals.is_left].reshape(-1)
+        t_ends = intervals.vals[intervals.is_right].reshape(-1)
+        midpoints = (t_starts + t_ends)[..., None] / 2.
+        t_origins = t_origins.unsqueeze(1).repeat(1, 8, 1).reshape(-1, 3)
+        t_dirs = t_dirs.unsqueeze(1).repeat(1, 8, 1).reshape(-1, 3)
+        ray_indices = ray_indices.unsqueeze(-1).repeat(1, 8).reshape(-1)
+        positions = t_origins + t_dirs * midpoints
+        dists = t_ends - t_starts
+        
         sdf, sdf_grad, feature, sdf_laplace = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True)
         normal = F.normalize(sdf_grad, p=2, dim=-1)
         alpha = self.get_alpha(sdf, normal, t_dirs, dists)
