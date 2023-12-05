@@ -7,17 +7,17 @@ dataset:
   root_dir: ???
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
-  center_est_method: lookat
+  center_est_method: point
   n_test_traj_steps: 30
   apply_mask: false
   load_data_on_gpu: false
-  dense_pcd_path: dense/fused.ply
+  dense_pcd_path: fused.ply
 
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 1024
-  train_num_rays: 128
+  num_samples_per_ray: 512
+  train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
   grid_prune_occ_thre: 0.001
