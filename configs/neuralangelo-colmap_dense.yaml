@@ -124,7 +124,7 @@ system:
     lambda_rgb_l1: 0.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_curvature: [0, 0, 5.e-1, 5000]
+    lambda_curvature: [0, 0, 5.e-2, 5000]
     lambda_sparsity: 0.0
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
