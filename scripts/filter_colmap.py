@@ -143,7 +143,7 @@ def create_masked_image(image_path: str, mask_path: str) -> np.ndarray:
 @click.command()
 @click.option('--data', type=str, help='path to data dir')
 @click.option('--output-dir', type=str, help='path to output dir')
-@click.option('--matching-method', type=str, default='squential_matcher', help='matching method to use (default: squential_matcher)')
+@click.option('--matching-method', type=str, default='exhaustive_matcher', help='matching method to use (default: squential_matcher)')
 def main(data, output_dir, matching_method):
     source = data
     target = output_dir
@@ -189,7 +189,7 @@ def main(data, output_dir, matching_method):
     if os.path.exists(f'{target}/database.db'):
         os.remove(f'{target}/database.db')
         
-    feature_extractor_command = f'{colmap_bin} feature_extractor --database_path {target}/database.db --image_path {source}/masked_image > {target}/log.txt'
+    feature_extractor_command = f'{colmap_bin} feature_extractor --database_path {target}/database.db --image_path {target}/masked_image > {target}/log.txt'
     feature_extraction_time, feature_extraction_return_code = run_command(feature_extractor_command, "Running feature_extractor...")
 
     if matching_method == 'vocab_tree_matcher':
@@ -208,7 +208,7 @@ def main(data, output_dir, matching_method):
     sparse_reconstruction_folder = os.path.join(target, 'sparse/0')
     os.makedirs(sparse_reconstruction_folder, exist_ok=True)
     # Run point_triangulator to compute the 3D points
-    point_triangulator_command = f'{colmap_bin} point_triangulator --database_path {target}/database.db --image_path {source}/masked_image \
+    point_triangulator_command = f'{colmap_bin} point_triangulator --database_path {target}/database.db --image_path {target}/masked_image \
                                         --input_path {source_reconstruction_folder} --output_path {sparse_reconstruction_folder} \
                                         --Mapper.tri_min_angle 15 --Mapper.tri_merge_max_reproj_error 0.5 --clear_points 1 >> {target}/log.txt'
     point_triangulation_time, point_triangulation_return_code = run_command(point_triangulator_command, "Running point_triangulator...")
