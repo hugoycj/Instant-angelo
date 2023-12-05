@@ -8,12 +8,12 @@ sfm_time=`date +"%Y-%m-%d %H:%M:%S"`
 echo "---model_converter---"
 colmap model_converter \
     --input_path $INPUT_DIR/sparse/0 \
-    --output_path $INPUT_DIR/sparse \
+    --output_path $INPUT_DIR/sparse/0 \
     --output_type TXT
 
 colmap model_converter \
     --input_path $INPUT_DIR/sparse/0 \
-    --output_path $INPUT_DIR/sparse/points3D.ply --output_type PLY
+    --output_path $INPUT_DIR/sparse/0/points3D.ply --output_type PLY
 model_converter_time=`date +"%Y-%m-%d %H:%M:%S"`
 
 echo "---colmap2mvsnet---"
