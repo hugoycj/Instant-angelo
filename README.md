@@ -71,13 +71,6 @@ If mask is avaible and placed at the right place under data_folder you could sta
 bash run_neuralangelo-colmap_sparse.sh ${INPUT_DIR}_filtered
 ```
 
-Additionally, we have developed an experimental version called **SH-neuralangelo**, which utilizes Spherical Harmonics (SH) instead of Multilayer Perceptron (MLP) for radiance field. SH-neuralangelo is inspired by [Plenoxel](https://alexyu.net/plenoxels/) and [Gaussian Splatting](https://github.com/graphdeco-inria/gaussian-splatting), incorporating progressive Spherical Harmonics for faster convergence and better coefficient regulation.
-```
-bash run_SH-neuralangelo-colmap_sparse.sh ${INPUT_DIR}
-```
-However, currently, SH-Neus is inferior to the original Neus with MLP in terms of PSNR and reconstruction quality. We are actively working on improving its quality and plan to support exporting Spherical Harmonics coefficients for real-time viewers in the future, similar to Gaussian Splatting.
-
-
 </details>
 
 ### Run Detail Surface Reconstruction in 20 Minutes
