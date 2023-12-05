@@ -11,7 +11,7 @@ dataset:
   n_test_traj_steps: 30
   apply_mask: false
   load_data_on_gpu: false
-  dense_pcd_path: fused.ply
+  dense_pcd_path: dense/fused.ply
 
 model:
   name: neus
