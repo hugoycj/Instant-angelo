@@ -11,3 +11,7 @@ pyransac3d
 torch_efficient_distloss
 tensorboard
 click
+open3d
+trimesh
+pymcubes 
+plyfile
