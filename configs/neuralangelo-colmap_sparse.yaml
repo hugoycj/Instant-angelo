@@ -35,7 +35,7 @@ model:
     name: volume-sdf
     radius: ${model.radius}
     feature_dim: 65
-    grad_type: analytic
+    grad_type: finite_difference
     finite_difference_eps: progressive
     isosurface:
       method: mc
