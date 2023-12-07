@@ -1,4 +1,5 @@
 import os
+import torch
 import logging
 import datasets
 import argparse
@@ -13,6 +14,7 @@ from utils.callbacks import (
     ConfigSnapshotCallback,
     CustomProgressBar,
 )
+from datasets.colmap import ColmapDataModule
 from utils.misc import load_config
 
 
@@ -52,19 +54,19 @@ def main():
     config.ckpt_dir = os.path.join(config.exp_dir, config.trial_name, "ckpt")
     config.code_dir = os.path.join(config.exp_dir, config.trial_name, "code")
     config.config_dir = os.path.join(config.exp_dir, config.trial_name, "config")
-
+    # torch.set_float32_matmul_precision("medium")
     logger = logging.getLogger("pytorch_lightning")
     if args.verbose:
         logger.setLevel(logging.DEBUG)
 
     pl.seed_everything(config.seed)
-    dm = datasets.make(config.dataset.name, config.dataset)
+    # dm = datasets.make(config.dataset.name, config.dataset)
     system = systems.make(
         config.system.name,
         config,
         load_from_checkpoint=None if not args.resume_weights_only else args.resume,
     )
-
+    dm = ColmapDataModule(config.dataset, torch.device("cuda:0"))
     callbacks = []
     if args.train:
         callbacks += [
