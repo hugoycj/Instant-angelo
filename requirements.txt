@@ -1,4 +1,4 @@
-pytorch-lightning<2
+# pytorch-lightning<2
 omegaconf==2.2.3
 nerfacc==0.3.3
 matplotlib
@@ -6,7 +6,7 @@ opencv-python
 imageio
 imageio-ffmpeg
 scipy
-CuMCubes
+# CuMCubes
 pyransac3d
 torch_efficient_distloss
 tensorboard
