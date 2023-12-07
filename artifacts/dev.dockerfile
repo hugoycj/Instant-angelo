@@ -15,6 +15,9 @@ ENV CUDA_DEVICE_ORDER="PCI_BUS_ID"
 
 # Install required apt packages.
 RUN apt-get update && \
+    apt install -y software-properties-common && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -43,6 +46,9 @@ RUN apt-get update && \
     qtbase5-dev \
     wget \
     openssh-server
+
+RUN apt-get upgrade -y libstdc++6 && \
+    apt-get dist-upgrade -y
 
 # Install GLOG (required by ceres).
 RUN git clone --branch v0.6.0 https://github.com/google/glog.git --single-branch && \
