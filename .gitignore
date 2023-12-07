@@ -152,3 +152,4 @@ load/
 extern/
 data/
 results
+common_test.py

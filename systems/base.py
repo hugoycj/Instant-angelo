@@ -64,7 +64,7 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         self.preprocess_data(batch, "train")
         update_module_step(self.model, self.current_epoch, self.global_step)
 
-    def on_validation_batch_start(self, batch, batch_idx, dataloader_idx):
+    def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
         self.dataset = self.trainer.datamodule.val_dataloader().dataset
         self.preprocess_data(batch, "validation")
         update_module_step(self.model, self.current_epoch, self.global_step)
@@ -103,12 +103,12 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         pass
     """
 
-    def on_validation_epoch_end(self, out):
-        """
-        Gather metrics from all devices, compute mean.
-        Purge repeated results using data index.
-        """
-        raise NotImplementedError
+    # def on_validation_epoch_end(self, out):
+    #     """
+    #     Gather metrics from all devices, compute mean.
+    #     Purge repeated results using data index.
+    #     """
+    #     raise NotImplementedError
 
     def test_step(self, batch, batch_idx):
         raise NotImplementedError

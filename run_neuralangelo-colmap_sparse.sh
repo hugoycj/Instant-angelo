@@ -14,10 +14,15 @@ echo "---sparse_visualize---"
 colmap model_converter \
     --input_path $INPUT_DIR/sparse/0 \
     --output_path $INPUT_DIR/sparse/0/points3D.ply --output_type PLY
-sparse_visualize_time=`date +"%Y-%m-%d %H:%M:%S"`
 
+exp_dir="/mnt/nas/share-all/caizebin/07.cache/nerf/nerfsudio/output"
 echo "---angelo_recon---"
-python launch.py --config configs/neuralangelo-colmap_sparse.yaml --gpu 1 --train     dataset.root_dir=$INPUT_DIR
+python launch.py \
+    --config configs/neuralangelo-colmap_sparse.yaml \
+    --gpu 1 \
+    --train \
+    --exp_dir ${exp_dir} \
+    dataset.root_dir=$INPUT_DIR
 angelo_recon_time=`date +"%Y-%m-%d %H:%M:%S"`
 
 echo 'start time:' $starttime

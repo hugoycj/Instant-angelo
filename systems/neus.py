@@ -2,13 +2,8 @@ import torch
 import torch.nn.functional as F
 from torch_efficient_distloss import flatten_eff_distloss
 
-import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
-
-import models
-from models.utils import cleanup
-from models.ray_utils import get_rays
 import systems
+from models.ray_utils import get_rays
 from systems.base import BaseSystem
 from systems.criterions import PSNR, binary_cross_entropy
 
@@ -319,28 +314,9 @@ class NeuSSystem(BaseSystem):
                 },
             ],
         )
+
+        self.log("val/psnr", psnr, prog_bar=True, rank_zero_only=True)
         return {"psnr": psnr, "index": batch["index"]}
-
-    """
-    # aggregate outputs from different devices when using DP
-    def validation_step_end(self, out):
-        pass
-    """
-
-    def on_validation_epoch_end(self, out):
-        out = self.all_gather(out)
-        if self.trainer.is_global_zero:
-            out_set = {}
-            for step_out in out:
-                # DP
-                if step_out["index"].ndim == 1:
-                    out_set[step_out["index"].item()] = {"psnr": step_out["psnr"]}
-                # DDP
-                else:
-                    for oi, index in enumerate(step_out["index"]):
-                        out_set[index[0].item()] = {"psnr": step_out["psnr"][oi]}
-            psnr = torch.mean(torch.stack([o["psnr"] for o in out_set.values()]))
-            self.log("val/psnr", psnr, prog_bar=True, rank_zero_only=True)
 
     def test_step(self, batch, batch_idx):
         out = self(batch)

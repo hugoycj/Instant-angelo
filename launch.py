@@ -1,9 +1,19 @@
-import sys
-import argparse
 import os
-import time
 import logging
+import datasets
+import argparse
+import systems
 from datetime import datetime
+import pytorch_lightning as pl
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
+from utils.callbacks import (
+    CodeSnapshotCallback,
+    ConfigSnapshotCallback,
+    CustomProgressBar,
+)
+from utils.misc import load_config
 
 
 def main():
@@ -33,54 +43,21 @@ def main():
     )
 
     args, extras = parser.parse_known_args()
-
-    # set CUDA_VISIBLE_DEVICES then import pytorch-lightning
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    n_gpus = len(args.gpu.split(","))
-
-    import datasets
-    import systems
-    import pytorch_lightning as pl
-    from pytorch_lightning import Trainer
-    from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-    from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
-    from utils.callbacks import (
-        CodeSnapshotCallback,
-        ConfigSnapshotCallback,
-        CustomProgressBar,
-    )
-    from utils.misc import load_config
-
     # parse YAML config to OmegaConf
     config = load_config(args.config, cli_args=extras)
     config.cmd_args = vars(args)
-
-    config.trial_name = config.get("trial_name") or (
-        config.tag + datetime.now().strftime("@%Y%m%d-%H%M%S")
-    )
-    config.exp_dir = config.get("exp_dir") or os.path.join(args.exp_dir, config.name)
-    config.save_dir = config.get("save_dir") or os.path.join(
-        config.exp_dir, config.trial_name, "save"
-    )
-    config.ckpt_dir = config.get("ckpt_dir") or os.path.join(
-        config.exp_dir, config.trial_name, "ckpt"
-    )
-    config.code_dir = config.get("code_dir") or os.path.join(
-        config.exp_dir, config.trial_name, "code"
-    )
-    config.config_dir = config.get("config_dir") or os.path.join(
-        config.exp_dir, config.trial_name, "config"
-    )
+    config.trial_name = f"{config.tag}{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    config.exp_dir = f"{args.exp_dir}/{config.name}"
+    config.save_dir = f"{config.exp_dir}/{config.trial_name}/save"
+    config.ckpt_dir = os.path.join(config.exp_dir, config.trial_name, "ckpt")
+    config.code_dir = os.path.join(config.exp_dir, config.trial_name, "code")
+    config.config_dir = os.path.join(config.exp_dir, config.trial_name, "config")
 
     logger = logging.getLogger("pytorch_lightning")
     if args.verbose:
         logger.setLevel(logging.DEBUG)
 
-    if "seed" not in config:
-        config.seed = int(time.time() * 1000) % 1000
     pl.seed_everything(config.seed)
-
     dm = datasets.make(config.dataset.name, config.dataset)
     system = systems.make(
         config.system.name,
@@ -107,25 +84,17 @@ def main():
             CSVLogger(config.exp_dir, name=config.trial_name, version="csv_logs"),
         ]
 
-    if sys.platform == "win32":
-        # does not support multi-gpu on windows
-        strategy = "dp"
-        assert n_gpus == 1
-    else:
-        strategy = "ddp_find_unused_parameters_false"
-
     trainer = Trainer(
-        devices=n_gpus,
+        devices=args.gpu,
         accelerator="gpu",
         callbacks=callbacks,
         logger=loggers,
-        strategy=strategy,
-        **config.trainer
+        strategy="ddp_find_unused_parameters_false",
+        **config.trainer,
     )
 
     if args.train:
         if args.resume and not args.resume_weights_only:
-            # FIXME: different behavior in pytorch-lighting>1.9 ?
             trainer.fit(system, datamodule=dm, ckpt_path=args.resume)
         else:
             trainer.fit(system, datamodule=dm)
