@@ -1,4 +1,4 @@
-INPUT_DIR=$1
+INPUT_DIR=/mnt/nas/share-all/caizebin/03.dataset/nerf/instantangelo/dragon
 export CUDA_DEVICE_ORDER="PCI_BUS_ID"
 export CUDA_VISIBLE_DEVICES=1
 export CUDA_HOME=/usr/local/cuda
@@ -17,8 +17,8 @@ colmap model_converter \
 
 exp_dir="/mnt/nas/share-all/caizebin/07.cache/nerf/nerfsudio/output"
 echo "---angelo_recon---"
-python launch.py \
-    --config configs/neuralangelo-colmap_sparse.yaml \
+python trainer.py \
+    --config configs/neuralangelo-colmap_sparse_trainer.yaml \
     --gpu 1 \
     --train \
     --exp_dir ${exp_dir} \

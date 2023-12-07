@@ -1,19 +1,26 @@
 import os
-import logging
+
 import datasets
 import argparse
 import systems
+from pydlutils.torch import seed
+from loguru import logger
 from datetime import datetime
-import pytorch_lightning as pl
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
-from utils.callbacks import (
-    CodeSnapshotCallback,
-    ConfigSnapshotCallback,
-    CustomProgressBar,
-)
 from utils.misc import load_config
+
+
+class Trainer:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.global_step = 0
+
+    def train(self, system, datamodule, ckpt_path):
+        max_epoch = self.cfg.get("max_epoch", 1)
+        for epoch in range(max_epoch):
+            train_dataloader = datamodule.train_dataloader()
+            for batch_idx, batch in enumerate(train_dataloader):
+                self.global_step += 1
+                system.on_train_batch_start(batch, batch_idx)
 
 
 def main():
@@ -53,58 +60,29 @@ def main():
     config.code_dir = os.path.join(config.exp_dir, config.trial_name, "code")
     config.config_dir = os.path.join(config.exp_dir, config.trial_name, "config")
 
-    logger = logging.getLogger("pytorch_lightning")
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
-
-    pl.seed_everything(config.seed)
+    seed.set_seed(config.seed)
     dm = datasets.make(config.dataset.name, config.dataset)
     system = systems.make(
         config.system.name,
         config,
         load_from_checkpoint=None if not args.resume_weights_only else args.resume,
     )
+    system = None
+    trainer = Trainer(config.trainer)
+    trainer.train(system, dm, ckpt_path=args.resume)
 
-    callbacks = []
-    if args.train:
-        callbacks += [
-            ModelCheckpoint(dirpath=config.ckpt_dir, **config.checkpoint),
-            LearningRateMonitor(logging_interval="step"),
-            CodeSnapshotCallback(config.code_dir, use_version=False),
-            ConfigSnapshotCallback(config, config.config_dir, use_version=False),
-            CustomProgressBar(refresh_rate=1),
-        ]
-
-    loggers = []
-    if args.train:
-        loggers += [
-            TensorBoardLogger(
-                args.runs_dir, name=config.name, version=config.trial_name
-            ),
-            CSVLogger(config.exp_dir, name=config.trial_name, version="csv_logs"),
-        ]
-
-    trainer = Trainer(
-        devices=args.gpu,
-        accelerator="gpu",
-        callbacks=callbacks,
-        logger=loggers,
-        strategy="ddp_find_unused_parameters_false",
-        **config.trainer,
-    )
-
-    if args.train:
-        if args.resume and not args.resume_weights_only:
-            trainer.fit(system, datamodule=dm, ckpt_path=args.resume)
-        else:
-            trainer.fit(system, datamodule=dm)
-        trainer.test(system, datamodule=dm)
-    elif args.validate:
-        trainer.validate(system, datamodule=dm, ckpt_path=args.resume)
-    elif args.test:
-        trainer.test(system, datamodule=dm, ckpt_path=args.resume)
-    elif args.predict:
-        trainer.predict(system, datamodule=dm, ckpt_path=args.resume)
+    # if args.train:
+    #     if args.resume and not args.resume_weights_only:
+    #         trainer.fit(system, datamodule=dm, ckpt_path=args.resume)
+    #     else:
+    #         trainer.fit(system, datamodule=dm)
+    #     trainer.test(system, datamodule=dm)
+    # elif args.validate:
+    #     trainer.validate(system, datamodule=dm, ckpt_path=args.resume)
+    # elif args.test:
+    #     trainer.test(system, datamodule=dm, ckpt_path=args.resume)
+    # elif args.predict:
+    #     trainer.predict(system, datamodule=dm, ckpt_path=args.resume)
 
 
 if __name__ == "__main__":
