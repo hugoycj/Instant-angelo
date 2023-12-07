@@ -69,7 +69,7 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         self.preprocess_data(batch, "validation")
         update_module_step(self.model, self.current_epoch, self.global_step)
 
-    def on_test_batch_start(self, batch, batch_idx, dataloader_idx):
+    def on_test_batch_start(self, batch, batch_idx, dataloader_idx=0):
         self.dataset = self.trainer.datamodule.test_dataloader().dataset
         self.preprocess_data(batch, "test")
         update_module_step(self.model, self.current_epoch, self.global_step)
@@ -82,42 +82,10 @@ class BaseSystem(pl.LightningModule, SaverMixin):
     def training_step(self, batch, batch_idx):
         raise NotImplementedError
 
-    """
-    # aggregate outputs from different devices (DP)
-    def training_step_end(self, out):
-        pass
-    """
-
-    """
-    # aggregate outputs from different iterations
-    def training_epoch_end(self, out):
-        pass
-    """
-
     def validation_step(self, batch, batch_idx):
         raise NotImplementedError
 
-    """
-    # aggregate outputs from different devices when using DP
-    def validation_step_end(self, out):
-        pass
-    """
-
-    # def on_validation_epoch_end(self, out):
-    #     """
-    #     Gather metrics from all devices, compute mean.
-    #     Purge repeated results using data index.
-    #     """
-    #     raise NotImplementedError
-
     def test_step(self, batch, batch_idx):
-        raise NotImplementedError
-
-    def test_epoch_end(self, out):
-        """
-        Gather metrics from all devices, compute mean.
-        Purge repeated results using data index.
-        """
         raise NotImplementedError
 
     def export(self):

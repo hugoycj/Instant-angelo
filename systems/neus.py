@@ -342,36 +342,20 @@ class NeuSSystem(BaseSystem):
                 },
             ],
         )
+
+        self.log("test/psnr", psnr, prog_bar=True, rank_zero_only=True)
+
+        self.save_img_sequence(
+            f"it{self.global_step}-test",
+            f"it{self.global_step}-test",
+            "(\d+)\.png",
+            save_format="mp4",
+            fps=30,
+        )
+
+        self.export()
+
         return {"psnr": psnr, "index": batch["index"]}
-
-    def test_epoch_end(self, out):
-        """
-        Synchronize devices.
-        Generate image sequence using test outputs.
-        """
-        out = self.all_gather(out)
-        if self.trainer.is_global_zero:
-            out_set = {}
-            for step_out in out:
-                # DP
-                if step_out["index"].ndim == 1:
-                    out_set[step_out["index"].item()] = {"psnr": step_out["psnr"]}
-                # DDP
-                else:
-                    for oi, index in enumerate(step_out["index"]):
-                        out_set[index[0].item()] = {"psnr": step_out["psnr"][oi]}
-            psnr = torch.mean(torch.stack([o["psnr"] for o in out_set.values()]))
-            self.log("test/psnr", psnr, prog_bar=True, rank_zero_only=True)
-
-            self.save_img_sequence(
-                f"it{self.global_step}-test",
-                f"it{self.global_step}-test",
-                "(\d+)\.png",
-                save_format="mp4",
-                fps=30,
-            )
-
-            self.export()
 
     def export(self):
         mesh = self.model.export(self.config.export)
