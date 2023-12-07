@@ -54,13 +54,11 @@ def main():
     config.ckpt_dir = os.path.join(config.exp_dir, config.trial_name, "ckpt")
     config.code_dir = os.path.join(config.exp_dir, config.trial_name, "code")
     config.config_dir = os.path.join(config.exp_dir, config.trial_name, "config")
-    # torch.set_float32_matmul_precision("medium")
     logger = logging.getLogger("pytorch_lightning")
     if args.verbose:
         logger.setLevel(logging.DEBUG)
 
     pl.seed_everything(config.seed)
-    # dm = datasets.make(config.dataset.name, config.dataset)
     system = systems.make(
         config.system.name,
         config,
