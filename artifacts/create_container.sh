@@ -1,5 +1,5 @@
 IMG=zebincai/nerf:latest
-REPO_NAME=nrr
+REPO_NAME=insang
 NAME=zebin_${REPO_NAME}
 
 docker run -it -d --name $NAME \
