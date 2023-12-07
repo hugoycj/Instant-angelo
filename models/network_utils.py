@@ -199,7 +199,7 @@ class VanillaMLP(nn.Module):
             torch.nn.init.kaiming_uniform_(layer.weight, nonlinearity="relu")
 
         if self.weight_norm:
-            layer = nn.utils.weight_norm(layer)
+            layer = nn.utils.parametrizations.weight_norm(layer)
         return layer
 
     def make_activation(self):

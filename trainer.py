@@ -14,13 +14,47 @@ class Trainer:
         self.cfg = cfg
         self.global_step = 0
 
+    def validate(self, system, datamodule):
+        dataloader = datamodule.val_dataloader()
+        system.model.eval()
+        for bidx, batch in enumerate(dataloader):
+            system.on_validation_batch_start(batch, bidx)
+            system.validation_step(batch, bidx)
+        system.model.train()
+
+    def test(self, system, datamodule):
+        dataloader = datamodule.test_dataloader()
+        system.model.eval()
+        for bidx, batch in enumerate(dataloader):
+            system.on_test_batch_start(batch, bidx)
+            system.test_step(batch, bidx)
+
     def train(self, system, datamodule, ckpt_path):
         max_epoch = self.cfg.get("max_epoch", 1)
+        cfg = self.cfg
+        optim = system.configure_optimizers()
+        optimizer = optim["optimizer"]
+        scheduler = optim["lr_scheduler"]
+        datamodule.setup()
         for epoch in range(max_epoch):
-            train_dataloader = datamodule.train_dataloader()
-            for batch_idx, batch in enumerate(train_dataloader):
+            dataloader = datamodule.train_dataloader()
+            system.model.train()
+            for batch_idx, batch in enumerate(dataloader):
                 self.global_step += 1
+                optimizer.zero_grad()
                 system.on_train_batch_start(batch, batch_idx)
+                loss = system.training_step(batch, batch_idx)
+                loss["loss"].backward()
+                optimizer.step()
+                scheduler.step()
+
+                if self.global_step % cfg.log_every_n_steps == 0:
+                    logger.info(f"Epoch {epoch}: {self.global_step}/{cfg.max_steps}")
+
+                if self.global_step % cfg.val_check_interval == 0:
+                    self.validate(system, datamodule)
+
+        self.test(system, datamodule)
 
 
 def main():
@@ -70,19 +104,6 @@ def main():
     system = None
     trainer = Trainer(config.trainer)
     trainer.train(system, dm, ckpt_path=args.resume)
-
-    # if args.train:
-    #     if args.resume and not args.resume_weights_only:
-    #         trainer.fit(system, datamodule=dm, ckpt_path=args.resume)
-    #     else:
-    #         trainer.fit(system, datamodule=dm)
-    #     trainer.test(system, datamodule=dm)
-    # elif args.validate:
-    #     trainer.validate(system, datamodule=dm, ckpt_path=args.resume)
-    # elif args.test:
-    #     trainer.test(system, datamodule=dm, ckpt_path=args.resume)
-    # elif args.predict:
-    #     trainer.predict(system, datamodule=dm, ckpt_path=args.resume)
 
 
 if __name__ == "__main__":
