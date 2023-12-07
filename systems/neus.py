@@ -35,23 +35,6 @@ class NeuSSystem(BaseSystem):
             index = batch["index"]
         else:
             if self.config.model.batch_image_sampling:
-                # if self.sample_foreground_ratio < 1:
-                #     fg_ray_index = torch.randint(
-                #         0,
-                #         len(self.dataset.all_fg_indexs),
-                #         size=(int(self.train_num_rays * 0.8),),
-                #     )
-                #     bg_ray_index = torch.randint(
-                #         0,
-                #         len(self.dataset.all_bg_indexs),
-                #         size=(self.train_num_rays - int(self.train_num_rays * 0.8),),
-                #     )
-
-                #     fg_ray_index = self.dataset.all_fg_indexs[fg_ray_index]
-                #     bg_ray_index = self.dataset.all_bg_indexs[bg_ray_index]
-                #     ray_index = torch.cat([fg_ray_index, bg_ray_index], dim=0)
-                #     index, y, x = ray_index[:, 0], ray_index[:, 1], ray_index[:, 2]
-                # else:
                 index = torch.randint(
                     0,
                     len(self.dataset.all_images),
