@@ -181,4 +181,3 @@ trainer:
   limit_val_batches: 1
   enable_progress_bar: true
   precision: 16
-  
