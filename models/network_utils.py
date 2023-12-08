@@ -1,11 +1,8 @@
 import math
-import numpy as np
-
 import torch
 import torch.nn as nn
 import tinycudann as tcnn
-
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug, rank_zero_info
+from loguru import logger
 
 from utils.misc import config_to_primitive, get_rank
 from models.utils import get_activation
@@ -46,7 +43,7 @@ class VanillaFrequency(nn.Module):
                     ).clamp(0, 1)
                 )
             ) / 2.0
-            rank_zero_debug(
+            logger.debug(
                 f"Update mask: {global_step}/{self.n_masking_step} {self.mask}"
             )
 
@@ -87,7 +84,7 @@ class ProgressiveBandHashGrid(nn.Module):
             self.n_level,
         )
         if current_level > self.current_level:
-            rank_zero_info(f"Update grid level to {current_level}")
+            logger.info(f"Update grid level to {current_level}")
         self.current_level = current_level
         self.mask[: self.current_level * self.n_features_per_level] = 1.0
 
@@ -210,7 +207,7 @@ class VanillaMLP(nn.Module):
 
 
 def sphere_init_tcnn_network(n_input_dims, n_output_dims, config, network):
-    rank_zero_debug("Initialize tcnn MLP to approximately represent a sphere.")
+    logger.debug("Initialize tcnn MLP to approximately represent a sphere.")
     """
     from https://github.com/NVlabs/tiny-cuda-nn/issues/96
     It's the weight matrices of each layer laid out in row-major order and then concatenated.

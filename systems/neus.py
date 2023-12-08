@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from loguru import logger
 from torch_efficient_distloss import flatten_eff_distloss
 
 import systems
@@ -130,7 +131,7 @@ class NeuSSystem(BaseSystem):
         )
 
     def training_step(self, batch, batch_idx):
-        out = self(batch)
+        out = self.forward(batch)
 
         loss = 0.0
 
@@ -149,25 +150,25 @@ class NeuSSystem(BaseSystem):
             out["comp_rgb_full"][out["rays_valid_full"][..., 0]],
             batch["rgb"][out["rays_valid_full"][..., 0]],
         )
-        self.log("train/loss_rgb_mse", loss_rgb_mse)
+        self.add_scalar("train/loss_rgb_mse", loss_rgb_mse)
         loss += loss_rgb_mse * self.C(self.config.system.loss.lambda_rgb_mse)
 
         loss_rgb_l1 = F.l1_loss(
             out["comp_rgb_full"][out["rays_valid_full"][..., 0]],
             batch["rgb"][out["rays_valid_full"][..., 0]],
         )
-        self.log("train/loss_rgb", loss_rgb_l1)
+        self.add_scalar("train/loss_rgb", loss_rgb_l1)
         loss += loss_rgb_l1 * self.C(self.config.system.loss.lambda_rgb_l1)
 
         loss_eikonal = (
             (torch.linalg.norm(out["sdf_grad_samples"], ord=2, dim=-1) - 1.0) ** 2
         ).mean()
-        self.log("train/loss_eikonal", loss_eikonal)
+        self.add_scalar("train/loss_eikonal", loss_eikonal)
         loss += loss_eikonal * self.C(self.config.system.loss.lambda_eikonal)
 
         opacity = torch.clamp(out["opacity"].squeeze(-1), 1.0e-3, 1.0 - 1.0e-3)
         loss_mask = binary_cross_entropy(opacity, batch["fg_mask"].float())
-        self.log("train/loss_mask", loss_mask)
+        self.add_scalar("train/loss_mask", loss_mask)
         loss += loss_mask * (
             self.C(self.config.system.loss.lambda_mask)
             if self.dataset.has_mask
@@ -175,13 +176,13 @@ class NeuSSystem(BaseSystem):
         )
 
         loss_opaque = binary_cross_entropy(opacity, opacity)
-        self.log("train/loss_opaque", loss_opaque)
+        self.add_scalar("train/loss_opaque", loss_opaque)
         loss += loss_opaque * self.C(self.config.system.loss.lambda_opaque)
 
         loss_sparsity = torch.exp(
             -self.config.system.loss.sparsity_scale * out["sdf_samples"].abs()
         ).mean()
-        self.log("train/loss_sparsity", loss_sparsity)
+        self.add_scalar("train/loss_sparsity", loss_sparsity)
         loss += loss_sparsity * self.C(self.config.system.loss.lambda_sparsity)
 
         if self.C(self.config.system.loss.lambda_curvature) > 0:
@@ -189,7 +190,7 @@ class NeuSSystem(BaseSystem):
                 "sdf_laplace_samples" in out
             ), "Need geometry.grad_type='finite_difference' to get SDF Laplace samples"
             loss_curvature = out["sdf_laplace_samples"].abs().mean()
-            self.log("train/loss_curvature", loss_curvature)
+            self.add_scalar("train/loss_curvature", loss_curvature)
             loss += loss_curvature * self.C(self.config.system.loss.lambda_curvature)
 
         # distortion loss proposed in MipNeRF360
@@ -198,7 +199,7 @@ class NeuSSystem(BaseSystem):
             loss_distortion = flatten_eff_distloss(
                 out["weights"], out["points"], out["intervals"], out["ray_indices"]
             )
-            self.log("train/loss_distortion", loss_distortion)
+            self.add_scalar("train/loss_distortion", loss_distortion)
             loss += loss_distortion * self.C(self.config.system.loss.lambda_distortion)
 
         if (
@@ -211,14 +212,14 @@ class NeuSSystem(BaseSystem):
                 out["intervals_bg"],
                 out["ray_indices_bg"],
             )
-            self.log("train/loss_distortion_bg", loss_distortion_bg)
+            self.add_scalar("train/loss_distortion_bg", loss_distortion_bg)
             loss += loss_distortion_bg * self.C(
                 self.config.system.loss.lambda_distortion_bg
             )
 
         losses_model_reg = self.model.regularizations(out)
         for name, value in losses_model_reg.items():
-            self.log(f"train/loss_{name}", value)
+            self.add_scalar(f"train/loss_{name}", value)
             loss_ = value * self.C(self.config.system.loss[f"lambda_{name}"])
             loss += loss_
 
@@ -236,8 +237,8 @@ class NeuSSystem(BaseSystem):
             normal_gt = torch.nn.functional.normalize(pts_normal, p=2, dim=-1)
             normal_pred = torch.nn.functional.normalize(pts2sdf_grad, p=2, dim=-1)
             loss_normal = (1.0 - torch.sum(normal_pred * normal_gt, dim=-1)).mean()
-            self.log("train/loss_sdf_l1", loss_sdf)
-            self.log("train/loss_normal_cos", loss_normal)
+            self.add_scalar("train/loss_sdf_l1", loss_sdf)
+            self.add_scalar("train/loss_normal_cos", loss_normal)
             loss += loss_sdf * self.C(self.config.system.loss.lambda_sdf_l1)
             loss += loss_normal * self.C(
                 self.config.system.loss.get(
@@ -245,79 +246,18 @@ class NeuSSystem(BaseSystem):
                 )
             )
 
-        self.log("train/inv_s", out["inv_s"], prog_bar=True)
+        self.add_scalar("train/inv_s", out["inv_s"])
 
         for name, value in self.config.system.loss.items():
             if name.startswith("lambda"):
-                self.log(f"train_params/{name}", self.C(value))
+                self.add_scalar(f"train_params/{name}", self.C(value))
 
-        self.log("train/num_rays", float(self.train_num_rays), prog_bar=True)
+        self.add_scalar("train/num_rays", float(self.train_num_rays))
 
         return {"loss": loss}
 
-    """
-    # aggregate outputs from different devices (DP)
-    def training_step_end(self, out):
-        pass
-    """
-
-    """
-    # aggregate outputs from different iterations
-    def training_epoch_end(self, out):
-        pass
-    """
-
-    def validation_step(self, batch, batch_idx):
-        out = self(batch)
-        psnr = self.criterions["psnr"](
-            out["comp_rgb_full"].to(batch["rgb"]), batch["rgb"]
-        )
-        W, H = self.dataset.img_wh
-        self.save_image_grid(
-            f"it{self.global_step}-{batch['index'][0].item()}.png",
-            [
-                {
-                    "type": "rgb",
-                    "img": batch["rgb"].view(H, W, 3),
-                    "kwargs": {"data_format": "HWC"},
-                },
-                {
-                    "type": "rgb",
-                    "img": out["comp_rgb_full"].view(H, W, 3),
-                    "kwargs": {"data_format": "HWC"},
-                },
-            ]
-            + (
-                [
-                    {
-                        "type": "rgb",
-                        "img": out["comp_rgb_bg"].view(H, W, 3),
-                        "kwargs": {"data_format": "HWC"},
-                    },
-                    {
-                        "type": "rgb",
-                        "img": out["comp_rgb"].view(H, W, 3),
-                        "kwargs": {"data_format": "HWC"},
-                    },
-                ]
-                if self.config.model.learned_background
-                else []
-            )
-            + [
-                {"type": "grayscale", "img": out["depth"].view(H, W), "kwargs": {}},
-                {
-                    "type": "rgb",
-                    "img": out["comp_normal"].view(H, W, 3),
-                    "kwargs": {"data_format": "HWC", "data_range": (-1, 1)},
-                },
-            ],
-        )
-
-        self.log("val/psnr", psnr, prog_bar=True, rank_zero_only=True)
-        return {"psnr": psnr, "index": batch["index"]}
-
     def test_step(self, batch, batch_idx):
-        out = self(batch)
+        out = self.forward(batch)
         psnr = self.criterions["psnr"](
             out["comp_rgb_full"].to(batch["rgb"]), batch["rgb"]
         )
@@ -341,18 +281,7 @@ class NeuSSystem(BaseSystem):
             ],
         )
 
-        self.log("test/psnr", psnr, prog_bar=True, rank_zero_only=True)
-
-        self.save_img_sequence(
-            f"it{self.global_step}-test",
-            f"it{self.global_step}-test",
-            "(\d+)\.png",
-            save_format="mp4",
-            fps=30,
-        )
-
-        self.export()
-
+        self.add_scalar("test/psnr", psnr)
         return {"psnr": psnr, "index": batch["index"]}
 
     def export(self):

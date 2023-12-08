@@ -18,36 +18,28 @@ class Trainer:
         self.writer = SummaryWriter(f"{config.exp_dir}/{config.trial_name}")
         self.global_step = 0
 
-    def validate(self, system, datamodule):
-        dataloader = datamodule.val_dataloader()
-        system.model.eval()
-        for bidx, batch in enumerate(dataloader):
-            system.on_validation_batch_start(batch, bidx, dataloader.dataset)
-            system.validation_step(batch, bidx)
-        system.model.train()
-
     def test(self, system, datamodule):
+        logger.info("Testing .....")
         dataloader = datamodule.test_dataloader()
         system.model.eval()
         for bidx, batch in enumerate(dataloader):
-            system.on_test_batch_start(batch, bidx, dataloader.dataset)
+            system.on_test_batch_start(batch, dataloader.dataset)
             system.test_step(batch, bidx)
+        system.model.train()
 
     def train(self, system, datamodule, ckpt_path):
         max_epoch = self.cfg.get("max_epoch", 1)
         cfg = self.cfg
         system.setup(self.writer, self.device)
         datamodule.setup(stage=None, device=self.device)
-        optim = system.configure_optimizers()
-        optimizer = optim["optimizer"]
-        scheduler = optim["lr_scheduler"]["scheduler"]
+        optimizer, scheduler = system.configure_optimizers()
         for epoch in range(max_epoch):
             dataloader = datamodule.train_dataloader()
             system.model.train()
             for batch_idx, batch in enumerate(dataloader):
                 optimizer.zero_grad()
                 system.update_status(epoch, self.global_step)
-                system.on_train_batch_start(batch, batch_idx, dataloader.dataset)
+                system.on_train_batch_start(batch, dataloader.dataset)
                 loss = system.training_step(batch, batch_idx)
                 loss["loss"].backward()
                 optimizer.step()
@@ -57,9 +49,12 @@ class Trainer:
                     logger.info(f"Epoch {epoch}: {self.global_step}/{cfg.max_steps}")
 
                 if self.global_step % cfg.val_check_interval == 0:
-                    self.validate(system, datamodule)
+                    self.test(system, datamodule)
 
-        self.test(system, datamodule)
+                if self.global_step == cfg.max_steps:
+                    break
+
+        system.export()
 
 
 def main():

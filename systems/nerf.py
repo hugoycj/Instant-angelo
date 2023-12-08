@@ -1,12 +1,7 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch_efficient_distloss import flatten_eff_distloss
 
-import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
-
-import models
 from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
@@ -15,12 +10,6 @@ from systems.criterions import PSNR
 
 @systems.register("nerf-system")
 class NeRFSystem(BaseSystem):
-    """
-    Two ways to print to console:
-    1. self.print: correctly handle progress bar
-    2. rank_zero_info: use the logging module
-    """
-
     def prepare(self):
         self.criterions = {"psnr": PSNR()}
         self.train_num_samples = (

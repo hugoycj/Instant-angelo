@@ -146,10 +146,4 @@ cython_debug/
 
 .DS_Store
 .vscode/
-exp/
-runs/
-load/
-extern/
-data/
-results
 common_test.py

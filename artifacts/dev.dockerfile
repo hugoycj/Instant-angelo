@@ -93,8 +93,29 @@ RUN pip install --upgrade pip setuptools pathtools promise && \
 # Install tynyCUDNN.
 RUN pip install git+https://github.com/NVlabs/tiny-cuda-nn.git#subdirectory=bindings/torch
 
+RUN git clone https://github.com/lzhnb/CuMCubes.git && \
+    cd CuMCubes && \
+    python setup.py install && \
+    cd  .. && \
+    rm -r CuMCubes
+
 RUN pip install \
     nerfacc==0.3.5 \
     Pillow==9.5.0 \
     trimesh \
-    natsort
+    natsort \
+    omegaconf==2.2.3 \
+    matplotlib \
+    opencv-python \
+    imageio \
+    imageio-ffmpeg \
+    scipy \
+    pyransac3d \
+    torch_efficient_distloss \
+    tensorboard \
+    click \
+    open3d \
+    trimesh \
+    pymcubes \
+    plyfile \
+    pydlutils
