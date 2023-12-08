@@ -291,12 +291,7 @@ class ColmapDatasetBase:
                 os.path.join(self.config.root_dir, "sparse/0/images.bin")
             )
 
-            mask_dir = os.path.join(self.config.root_dir, "mask")
-            has_mask = os.path.exists(mask_dir)
-            apply_mask = has_mask and self.config.apply_mask
-
-            all_c2w, all_images, all_fg_masks = [], [], []
-            all_fg_indexs, all_bg_indexs = [], []
+            all_c2w, all_images = [], []
             for i, d in enumerate(imdata.values()):
                 R = d.qvec2rotmat()
                 t = d.tvec.reshape(3, 1)
@@ -308,33 +303,6 @@ class ColmapDatasetBase:
                     img = Image.open(img_path)
                     img = img.resize(img_wh, Image.BICUBIC)
                     img = TF.to_tensor(img).permute(1, 2, 0)[..., :3]
-                    if has_mask:
-                        mask_paths = [
-                            os.path.join(mask_dir, d.name),
-                            os.path.join(mask_dir, d.name[3:]),
-                        ]
-                        mask_paths = list(filter(os.path.exists, mask_paths))
-                        assert len(mask_paths) == 1
-                        mask = Image.open(mask_paths[0]).convert("L")  # (H, W, 1)
-                        mask = mask.resize(img_wh, Image.BICUBIC)
-                        mask = TF.to_tensor(mask)[0]
-                    else:
-                        mask = torch.ones_like(img[..., 0], device=img.device)
-                    fg_index = torch.stack(
-                        torch.nonzero(mask.bool(), as_tuple=True), dim=0
-                    )
-                    bg_index = torch.stack(
-                        torch.nonzero(~mask.bool(), as_tuple=True), dim=0
-                    )
-                    fg_index = torch.cat(
-                        [torch.full((1, fg_index.shape[1]), i), fg_index], dim=0
-                    )
-                    bg_index = torch.cat(
-                        [torch.full((1, bg_index.shape[1]), i), bg_index], dim=0
-                    )
-                    all_fg_indexs.append(fg_index.permute(1, 0))
-                    all_bg_indexs.append(bg_index.permute(1, 0))
-                    all_fg_masks.append(mask)  # (h, w)
                     all_images.append(img)
 
             all_c2w = torch.stack(all_c2w, dim=0)
@@ -402,17 +370,12 @@ class ColmapDatasetBase:
                 "h": h,
                 "img_wh": img_wh,
                 "factor": factor,
-                "has_mask": has_mask,
-                "apply_mask": apply_mask,
                 "directions": directions,
                 "pts3d": pts3d,
                 "pts3d_confidence": pts3d_confidence,
                 "pts3d_normal": pts3d_normal,
                 "all_c2w": all_c2w,
                 "all_images": all_images,
-                "all_fg_masks": all_fg_masks,
-                "all_fg_indexs": all_fg_indexs,
-                "all_bg_indexs": all_bg_indexs,
             }
 
             ColmapDatasetBase.initialized = True
@@ -427,25 +390,15 @@ class ColmapDatasetBase:
             self.all_images = torch.zeros(
                 (self.config.n_test_traj_steps, self.h, self.w, 3), dtype=torch.float32
             )
-            self.all_fg_masks = torch.zeros(
-                (self.config.n_test_traj_steps, self.h, self.w), dtype=torch.float32
-            )
             self.all_points = torch.tensor([])
             self.all_points_confidence = torch.tensor([])
-            self.all_fg_indexs, self.all_bg_indexs = torch.tensor([]), torch.tensor([])
         else:
-            self.all_images, self.all_fg_masks = (
-                torch.stack(self.all_images, dim=0).float(),
-                torch.stack(self.all_fg_masks, dim=0).float(),
-            )
+            self.all_images = torch.stack(self.all_images, dim=0).float()
             self.all_points = self.pts3d
             self.all_points_confidence = self.pts3d_confidence
-            self.all_fg_indexs = torch.cat(self.all_fg_indexs, dim=0)
-            self.all_bg_indexs = torch.cat(self.all_bg_indexs, dim=0)
 
         self.all_c2w = self.all_c2w.float()
         self.all_images = self.all_images
-        self.all_fg_masks = self.all_fg_masks
         self.all_points_confidence = self.all_points_confidence.float()
         self.all_points = self.all_points.float()
         self.pts3d_normal = self.pts3d_normal.float()
@@ -455,7 +408,6 @@ class ColmapDatasetBase:
 
     def to_device(self, device: torch.device):
         self.all_images = self.all_images.to(device)
-        self.all_fg_masks = self.all_fg_masks.to(device)
         self.all_c2w = self.all_c2w.to(device)
         self.all_points = self.all_points.to(device)
         self.pts3d_normal = self.pts3d_normal.to(device)
