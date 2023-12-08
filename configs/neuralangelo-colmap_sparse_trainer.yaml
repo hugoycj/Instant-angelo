@@ -169,7 +169,7 @@ checkpoint:
   every_n_train_steps: ${trainer.max_steps}
 
 export:
-  chunk_size: 2097152
+  chunk_size: 500000
   export_vertex_color: True
 
 trainer:

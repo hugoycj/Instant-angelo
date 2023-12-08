@@ -256,69 +256,8 @@ class NeuSSystem(BaseSystem):
 
         return {"loss": loss}
 
-    """
-    # aggregate outputs from different devices (DP)
-    def training_step_end(self, out):
-        pass
-    """
-
-    """
-    # aggregate outputs from different iterations
-    def training_epoch_end(self, out):
-        pass
-    """
-
-    def validation_step(self, batch, batch_idx):
-        out = self(batch)
-        psnr = self.criterions["psnr"](
-            out["comp_rgb_full"].to(batch["rgb"]), batch["rgb"]
-        )
-        W, H = self.dataset.img_wh
-        self.save_image_grid(
-            f"it{self.global_step}-{batch['index'][0].item()}.png",
-            [
-                {
-                    "type": "rgb",
-                    "img": batch["rgb"].view(H, W, 3),
-                    "kwargs": {"data_format": "HWC"},
-                },
-                {
-                    "type": "rgb",
-                    "img": out["comp_rgb_full"].view(H, W, 3),
-                    "kwargs": {"data_format": "HWC"},
-                },
-            ]
-            + (
-                [
-                    {
-                        "type": "rgb",
-                        "img": out["comp_rgb_bg"].view(H, W, 3),
-                        "kwargs": {"data_format": "HWC"},
-                    },
-                    {
-                        "type": "rgb",
-                        "img": out["comp_rgb"].view(H, W, 3),
-                        "kwargs": {"data_format": "HWC"},
-                    },
-                ]
-                if self.config.model.learned_background
-                else []
-            )
-            + [
-                {"type": "grayscale", "img": out["depth"].view(H, W), "kwargs": {}},
-                {
-                    "type": "rgb",
-                    "img": out["comp_normal"].view(H, W, 3),
-                    "kwargs": {"data_format": "HWC", "data_range": (-1, 1)},
-                },
-            ],
-        )
-
-        self.add_scalar("val/psnr", psnr)
-        return {"psnr": psnr, "index": batch["index"]}
-
     def test_step(self, batch, batch_idx):
-        out = self(batch)
+        out = self.forward(batch)
         psnr = self.criterions["psnr"](
             out["comp_rgb_full"].to(batch["rgb"]), batch["rgb"]
         )
@@ -343,17 +282,6 @@ class NeuSSystem(BaseSystem):
         )
 
         self.add_scalar("test/psnr", psnr)
-
-        self.save_img_sequence(
-            f"it{self.global_step}-test",
-            f"it{self.global_step}-test",
-            "(\d+)\.png",
-            save_format="mp4",
-            fps=30,
-        )
-
-        self.export()
-
         return {"psnr": psnr, "index": batch["index"]}
 
     def export(self):

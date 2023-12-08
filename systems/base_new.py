@@ -69,35 +69,17 @@ class BaseSystem(SaverMixin):
     def preprocess_data(self, batch, stage):
         pass
 
-    """
-    Implementing on_after_batch_transfer of DataModule does the same.
-    But on_after_batch_transfer does not support DP.
-    """
-
-    def on_train_batch_start(self, batch, batch_idx, dataset):
+    def on_train_batch_start(self, batch, dataset):
         self.dataset = dataset
         self.preprocess_data(batch, "train")
         update_module_step(self.model, self.current_epoch, self.global_step)
 
-    def on_validation_batch_start(self, batch, batch_idx, dataset):
-        self.dataset = dataset
-        self.preprocess_data(batch, "validation")
-        update_module_step(self.model, self.current_epoch, self.global_step)
-
-    def on_test_batch_start(self, batch, batch_idx, dataset):
+    def on_test_batch_start(self, batch, dataset):
         self.dataset = dataset
         self.preprocess_data(batch, "test")
         update_module_step(self.model, self.current_epoch, self.global_step)
 
-    def on_predict_batch_start(self, batch, batch_idx, dataset):
-        self.dataset = dataset
-        self.preprocess_data(batch, "predict")
-        update_module_step(self.model, self.current_epoch, self.global_step)
-
     def training_step(self, batch, batch_idx):
-        raise NotImplementedError
-
-    def validation_step(self, batch, batch_idx):
         raise NotImplementedError
 
     def test_step(self, batch, batch_idx):
@@ -107,16 +89,8 @@ class BaseSystem(SaverMixin):
         raise NotImplementedError
 
     def configure_optimizers(self):
-        optim = parse_optimizer(self.config.system.optimizer, self.model)
-        ret = {
-            "optimizer": optim,
-        }
-        if "scheduler" in self.config.system:
-            ret.update(
-                {
-                    "lr_scheduler": parse_scheduler(
-                        self.config.system.scheduler, optim
-                    ),
-                }
-            )
-        return ret
+        optimizer = parse_optimizer(self.config.system.optimizer, self.model)
+        scheduler = parse_scheduler(self.config.system.scheduler, optimizer)[
+            "scheduler"
+        ]
+        return optimizer, scheduler
