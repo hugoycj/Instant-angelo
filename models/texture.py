@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 
 import models
-from models.utils import get_activation, reflect, generate_ide_fn
+from models.utils import get_activation, generate_ide_fn
 from models.network_utils import get_encoding, get_mlp
 from systems.utils import update_module_step
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
+from loguru import logger
 
 
 @models.register("volume-radiance")
@@ -384,7 +384,7 @@ class VolumeProgressiveSphericalHarmonic(nn.Module):
             self.sh_level,
         )
         if current_level > self.current_level:
-            rank_zero_info(f"Update SH level to {current_level}")
+            logger.info(f"Update SH level to {current_level}")
         self.current_level = current_level
 
     def regularizations(self, out):

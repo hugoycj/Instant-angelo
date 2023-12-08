@@ -2,13 +2,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from pytorch_lightning.utilities.rank_zero import rank_zero_info
+from loguru import logger
 
 import math
 import models
 from models.base import BaseModel
-from models.utils import scale_anything, get_activation, cleanup, chunk_batch
+from models.utils import scale_anything, get_activation, cleanup
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
 from utils.misc import get_rank
 from systems.utils import update_module_step
@@ -243,7 +242,7 @@ class VolumeSDF(BaseImplicitGeometry):
         # will update at certain steps if finite_difference_eps="progressive"
         self._finite_difference_eps = None
         if self.grad_type == "finite_difference":
-            rank_zero_info(
+            logger.info(
                 f"Using finite difference to compute gradients with eps={self.finite_difference_eps}"
             )
 
@@ -438,7 +437,7 @@ class VolumeSDF(BaseImplicitGeometry):
             )
             grid_size = 2 * self.config.radius / grid_res
             if grid_size != self._finite_difference_eps:
-                rank_zero_info(f"Update finite_difference_eps to {grid_size}")
+                logger.info(f"Update finite_difference_eps to {grid_size}")
             self._finite_difference_eps = grid_size
         else:
             raise ValueError(

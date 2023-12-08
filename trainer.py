@@ -19,6 +19,7 @@ class Trainer:
         self.global_step = 0
 
     def test(self, system, datamodule):
+        logger.info("Testing .....")
         dataloader = datamodule.test_dataloader()
         system.model.eval()
         for bidx, batch in enumerate(dataloader):

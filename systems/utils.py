@@ -5,8 +5,7 @@ from bisect import bisect_right
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
-
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug
+from loguru import logger
 
 
 class ChainedScheduler(lr_scheduler._LRScheduler):
@@ -35,10 +34,12 @@ class ChainedScheduler(lr_scheduler._LRScheduler):
 
     def __init__(self, optimizer, schedulers):
         for scheduler_idx in range(1, len(schedulers)):
-            if (schedulers[scheduler_idx].optimizer != schedulers[0].optimizer):
+            if schedulers[scheduler_idx].optimizer != schedulers[0].optimizer:
                 raise ValueError(
                     "ChainedScheduler expects all schedulers to belong to the same optimizer, but "
-                    "got schedulers at index {} and {} to be different".format(0, scheduler_idx)
+                    "got schedulers at index {} and {} to be different".format(
+                        0, scheduler_idx
+                    )
                 )
         self._schedulers = list(schedulers)
         self.optimizer = optimizer
@@ -54,11 +55,15 @@ class ChainedScheduler(lr_scheduler._LRScheduler):
         is not the optimizer.
         The wrapped scheduler states will also be saved.
         """
-        state_dict = {key: value for key, value in self.__dict__.items() if key not in ('optimizer', '_schedulers')}
-        state_dict['_schedulers'] = [None] * len(self._schedulers)
+        state_dict = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key not in ("optimizer", "_schedulers")
+        }
+        state_dict["_schedulers"] = [None] * len(self._schedulers)
 
         for idx, s in enumerate(self._schedulers):
-            state_dict['_schedulers'][idx] = s.state_dict()
+            state_dict["_schedulers"][idx] = s.state_dict()
 
         return state_dict
 
@@ -69,11 +74,11 @@ class ChainedScheduler(lr_scheduler._LRScheduler):
             state_dict (dict): scheduler state. Should be an object returned
                 from a call to :meth:`state_dict`.
         """
-        _schedulers = state_dict.pop('_schedulers')
+        _schedulers = state_dict.pop("_schedulers")
         self.__dict__.update(state_dict)
         # Restore state_dict keys in order to prevent side effects
         # https://github.com/pytorch/pytorch/issues/32756
-        state_dict['_schedulers'] = _schedulers
+        state_dict["_schedulers"] = _schedulers
 
         for idx, s in enumerate(_schedulers):
             self._schedulers[idx].load_state_dict(s)
@@ -106,16 +111,20 @@ class SequentialLR(lr_scheduler._LRScheduler):
 
     def __init__(self, optimizer, schedulers, milestones, last_epoch=-1, verbose=False):
         for scheduler_idx in range(1, len(schedulers)):
-            if (schedulers[scheduler_idx].optimizer != schedulers[0].optimizer):
+            if schedulers[scheduler_idx].optimizer != schedulers[0].optimizer:
                 raise ValueError(
                     "Sequential Schedulers expects all schedulers to belong to the same optimizer, but "
-                    "got schedulers at index {} and {} to be different".format(0, scheduler_idx)
+                    "got schedulers at index {} and {} to be different".format(
+                        0, scheduler_idx
+                    )
                 )
-        if (len(milestones) != len(schedulers) - 1):
+        if len(milestones) != len(schedulers) - 1:
             raise ValueError(
                 "Sequential Schedulers expects number of schedulers provided to be one more "
                 "than the number of milestone points, but got number of schedulers {} and the "
-                "number of milestones to be equal to {}".format(len(schedulers), len(milestones))
+                "number of milestones to be equal to {}".format(
+                    len(schedulers), len(milestones)
+                )
             )
         self._schedulers = schedulers
         self._milestones = milestones
@@ -137,11 +146,15 @@ class SequentialLR(lr_scheduler._LRScheduler):
         is not the optimizer.
         The wrapped scheduler states will also be saved.
         """
-        state_dict = {key: value for key, value in self.__dict__.items() if key not in ('optimizer', '_schedulers')}
-        state_dict['_schedulers'] = [None] * len(self._schedulers)
+        state_dict = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key not in ("optimizer", "_schedulers")
+        }
+        state_dict["_schedulers"] = [None] * len(self._schedulers)
 
         for idx, s in enumerate(self._schedulers):
-            state_dict['_schedulers'][idx] = s.state_dict()
+            state_dict["_schedulers"][idx] = s.state_dict()
 
         return state_dict
 
@@ -152,11 +165,11 @@ class SequentialLR(lr_scheduler._LRScheduler):
             state_dict (dict): scheduler state. Should be an object returned
                 from a call to :meth:`state_dict`.
         """
-        _schedulers = state_dict.pop('_schedulers')
+        _schedulers = state_dict.pop("_schedulers")
         self.__dict__.update(state_dict)
         # Restore state_dict keys in order to prevent side effects
         # https://github.com/pytorch/pytorch/issues/32756
-        state_dict['_schedulers'] = _schedulers
+        state_dict["_schedulers"] = _schedulers
 
         for idx, s in enumerate(_schedulers):
             self._schedulers[idx].load_state_dict(s)
@@ -191,9 +204,13 @@ class ConstantLR(lr_scheduler._LRScheduler):
         >>>     scheduler.step()
     """
 
-    def __init__(self, optimizer, factor=1.0 / 3, total_iters=5, last_epoch=-1, verbose=False):
+    def __init__(
+        self, optimizer, factor=1.0 / 3, total_iters=5, last_epoch=-1, verbose=False
+    ):
         if factor > 1.0 or factor < 0:
-            raise ValueError('Constant multiplicative factor expected to be between 0 and 1.')
+            raise ValueError(
+                "Constant multiplicative factor expected to be between 0 and 1."
+            )
 
         self.factor = factor
         self.total_iters = total_iters
@@ -201,22 +218,30 @@ class ConstantLR(lr_scheduler._LRScheduler):
 
     def get_lr(self):
         if not self._get_lr_called_within_step:
-            warnings.warn("To get the last learning rate computed by the scheduler, "
-                          "please use `get_last_lr()`.", UserWarning)
+            warnings.warn(
+                "To get the last learning rate computed by the scheduler, "
+                "please use `get_last_lr()`.",
+                UserWarning,
+            )
 
         if self.last_epoch == 0:
-            return [group['lr'] * self.factor for group in self.optimizer.param_groups]
+            return [group["lr"] * self.factor for group in self.optimizer.param_groups]
 
-        if (self.last_epoch > self.total_iters or
-                (self.last_epoch != self.total_iters)):
-            return [group['lr'] for group in self.optimizer.param_groups]
+        if self.last_epoch > self.total_iters or (self.last_epoch != self.total_iters):
+            return [group["lr"] for group in self.optimizer.param_groups]
 
-        if (self.last_epoch == self.total_iters):
-            return [group['lr'] * (1.0 / self.factor) for group in self.optimizer.param_groups]
+        if self.last_epoch == self.total_iters:
+            return [
+                group["lr"] * (1.0 / self.factor)
+                for group in self.optimizer.param_groups
+            ]
 
     def _get_closed_form_lr(self):
-        return [base_lr * (self.factor + (self.last_epoch >= self.total_iters) * (1 - self.factor))
-                for base_lr in self.base_lrs]
+        return [
+            base_lr
+            * (self.factor + (self.last_epoch >= self.total_iters) * (1 - self.factor))
+            for base_lr in self.base_lrs
+        ]
 
 
 class LinearLR(lr_scheduler._LRScheduler):
@@ -252,13 +277,24 @@ class LinearLR(lr_scheduler._LRScheduler):
         >>>     scheduler.step()
     """
 
-    def __init__(self, optimizer, start_factor=1.0 / 3, end_factor=1.0, total_iters=5, last_epoch=-1,
-                 verbose=False):
+    def __init__(
+        self,
+        optimizer,
+        start_factor=1.0 / 3,
+        end_factor=1.0,
+        total_iters=5,
+        last_epoch=-1,
+        verbose=False,
+    ):
         if start_factor > 1.0 or start_factor < 0:
-            raise ValueError('Starting multiplicative factor expected to be between 0 and 1.')
+            raise ValueError(
+                "Starting multiplicative factor expected to be between 0 and 1."
+            )
 
         if end_factor > 1.0 or end_factor < 0:
-            raise ValueError('Ending multiplicative factor expected to be between 0 and 1.')
+            raise ValueError(
+                "Ending multiplicative factor expected to be between 0 and 1."
+            )
 
         self.start_factor = start_factor
         self.end_factor = end_factor
@@ -267,26 +303,49 @@ class LinearLR(lr_scheduler._LRScheduler):
 
     def get_lr(self):
         if not self._get_lr_called_within_step:
-            warnings.warn("To get the last learning rate computed by the scheduler, "
-                          "please use `get_last_lr()`.", UserWarning)
+            warnings.warn(
+                "To get the last learning rate computed by the scheduler, "
+                "please use `get_last_lr()`.",
+                UserWarning,
+            )
 
         if self.last_epoch == 0:
-            return [group['lr'] * self.start_factor for group in self.optimizer.param_groups]
+            return [
+                group["lr"] * self.start_factor for group in self.optimizer.param_groups
+            ]
 
-        if (self.last_epoch > self.total_iters):
-            return [group['lr'] for group in self.optimizer.param_groups]
+        if self.last_epoch > self.total_iters:
+            return [group["lr"] for group in self.optimizer.param_groups]
 
-        return [group['lr'] * (1. + (self.end_factor - self.start_factor) /
-                (self.total_iters * self.start_factor + (self.last_epoch - 1) * (self.end_factor - self.start_factor)))
-                for group in self.optimizer.param_groups]
+        return [
+            group["lr"]
+            * (
+                1.0
+                + (self.end_factor - self.start_factor)
+                / (
+                    self.total_iters * self.start_factor
+                    + (self.last_epoch - 1) * (self.end_factor - self.start_factor)
+                )
+            )
+            for group in self.optimizer.param_groups
+        ]
 
     def _get_closed_form_lr(self):
-        return [base_lr * (self.start_factor +
-                (self.end_factor - self.start_factor) * min(self.total_iters, self.last_epoch) / self.total_iters)
-                for base_lr in self.base_lrs]
+        return [
+            base_lr
+            * (
+                self.start_factor
+                + (self.end_factor - self.start_factor)
+                * min(self.total_iters, self.last_epoch)
+                / self.total_iters
+            )
+            for base_lr in self.base_lrs
+        ]
 
 
-custom_schedulers = ['ConstantLR', 'LinearLR']
+custom_schedulers = ["ConstantLR", "LinearLR"]
+
+
 def get_scheduler(name):
     if hasattr(lr_scheduler, name):
         return getattr(lr_scheduler, name)
@@ -297,7 +356,7 @@ def get_scheduler(name):
 
 
 def getattr_recursive(m, attr):
-    for name in attr.split('.'):
+    for name in attr.split("."):
         m = getattr(m, name)
     return m
 
@@ -312,13 +371,17 @@ def get_parameters(model, name):
 
 
 def parse_optimizer(config, model):
-    if hasattr(config, 'params'):
-        params = [{'params': get_parameters(model, name), 'name': name, **args} for name, args in config.params.items()]
-        rank_zero_debug('Specify optimizer params:', config.params)
+    if hasattr(config, "params"):
+        params = [
+            {"params": get_parameters(model, name), "name": name, **args}
+            for name, args in config.params.items()
+        ]
+        logger.debug("Specify optimizer params:", config.params)
     else:
         params = model.parameters()
-    if config.name in ['FusedAdam']:
+    if config.name in ["FusedAdam"]:
         import apex
+
         optim = getattr(apex.optimizers, config.name)(params, **config.args)
     else:
         optim = getattr(torch.optim, config.name)(params, **config.args)
@@ -326,26 +389,38 @@ def parse_optimizer(config, model):
 
 
 def parse_scheduler(config, optimizer):
-    interval = config.get('interval', 'epoch')
-    assert interval in ['epoch', 'step']
-    if config.name == 'SequentialLR':
+    interval = config.get("interval", "epoch")
+    assert interval in ["epoch", "step"]
+    if config.name == "SequentialLR":
         scheduler = {
-            'scheduler': SequentialLR(optimizer, [parse_scheduler(conf, optimizer)['scheduler'] for conf in config.schedulers], milestones=config.milestones),
-            'interval': interval
+            "scheduler": SequentialLR(
+                optimizer,
+                [
+                    parse_scheduler(conf, optimizer)["scheduler"]
+                    for conf in config.schedulers
+                ],
+                milestones=config.milestones,
+            ),
+            "interval": interval,
         }
-    elif config.name == 'Chained':
+    elif config.name == "Chained":
         scheduler = {
-            'scheduler': ChainedScheduler([parse_scheduler(conf, optimizer)['scheduler'] for conf in config.schedulers]),
-            'interval': interval
+            "scheduler": ChainedScheduler(
+                [
+                    parse_scheduler(conf, optimizer)["scheduler"]
+                    for conf in config.schedulers
+                ]
+            ),
+            "interval": interval,
         }
     else:
         scheduler = {
-            'scheduler': get_scheduler(config.name)(optimizer, **config.args),
-            'interval': interval
+            "scheduler": get_scheduler(config.name)(optimizer, **config.args),
+            "interval": interval,
         }
     return scheduler
 
 
 def update_module_step(m, epoch, global_step):
-    if hasattr(m, 'update_step'):
+    if hasattr(m, "update_step"):
         m.update_step(epoch, global_step)

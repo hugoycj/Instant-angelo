@@ -7,7 +7,6 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, IterableDataset
 import torchvision.transforms.functional as TF
-import pytorch_lightning as pl
 import open3d as o3d
 
 import datasets
@@ -18,6 +17,8 @@ from datasets.colmap_utils import (
 )
 from models.ray_utils import get_ray_directions
 from utils.misc import get_rank
+from models.utils import scale_anything
+from nerfacc import ContractionType
 
 
 def get_center(pts):
@@ -211,10 +212,6 @@ def create_spheric_poses(cameras, n_steps=120):
     all_c2w = torch.stack(all_c2w, dim=0)
 
     return all_c2w
-
-
-from models.utils import scale_anything
-from nerfacc import ContractionType
 
 
 def contract_to_unisphere(x, radius, contraction_type):
@@ -496,7 +493,7 @@ class ColmapIterableDataset(IterableDataset, ColmapDatasetBase):
 
 
 @datasets.register("colmap")
-class ColmapDataModule(pl.LightningDataModule):
+class ColmapDataModule:
     def __init__(self, config, device=None):
         super().__init__()
         self.config = config
@@ -505,44 +502,29 @@ class ColmapDataModule(pl.LightningDataModule):
     def setup(self, stage=None, device=None):
         if device is None:
             device = self.device
-        if stage in [None, "fit"]:
+        if stage in [None, "train"]:
             self.train_dataset = ColmapIterableDataset(self.config, "train")
             self.train_dataset.to_device(device)
-        if stage in [None, "fit", "validate"]:
-            self.val_dataset = ColmapDataset(
-                self.config, self.config.get("val_split", "train")
-            )
-            self.val_dataset.to_device(device)
         if stage in [None, "test"]:
             self.test_dataset = ColmapDataset(
                 self.config, self.config.get("test_split", "test")
             )
             self.test_dataset.to_device(device)
-        if stage in [None, "predict"]:
-            self.predict_dataset = ColmapDataset(self.config, "train")
-            self.predict_dataset.to_device(device)
 
     def prepare_data(self):
         pass
 
     def general_loader(self, dataset, batch_size):
-        sampler = None
         return DataLoader(
             dataset,
             num_workers=os.cpu_count(),
             batch_size=batch_size,
             pin_memory=True,
-            sampler=sampler,
+            sampler=None,
         )
 
     def train_dataloader(self):
         return self.general_loader(self.train_dataset, batch_size=1)
 
-    def val_dataloader(self):
-        return self.general_loader(self.val_dataset, batch_size=1)
-
     def test_dataloader(self):
         return self.general_loader(self.test_dataset, batch_size=1)
-
-    def predict_dataloader(self):
-        return self.general_loader(self.predict_dataset, batch_size=1)
