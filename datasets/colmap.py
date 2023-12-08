@@ -502,23 +502,25 @@ class ColmapDataModule(pl.LightningDataModule):
         self.config = config
         self.device = device
 
-    def setup(self, stage=None):
+    def setup(self, stage=None, device=None):
+        if device is None:
+            device = self.device
         if stage in [None, "fit"]:
             self.train_dataset = ColmapIterableDataset(self.config, "train")
-            self.train_dataset.to_device(self.device)
+            self.train_dataset.to_device(device)
         if stage in [None, "fit", "validate"]:
             self.val_dataset = ColmapDataset(
                 self.config, self.config.get("val_split", "train")
             )
-            self.val_dataset.to_device(self.device)
+            self.val_dataset.to_device(device)
         if stage in [None, "test"]:
             self.test_dataset = ColmapDataset(
                 self.config, self.config.get("test_split", "test")
             )
-            self.test_dataset.to_device(self.device)
+            self.test_dataset.to_device(device)
         if stage in [None, "predict"]:
             self.predict_dataset = ColmapDataset(self.config, "train")
-            self.predict_dataset.to_device(self.device)
+            self.predict_dataset.to_device(device)
 
     def prepare_data(self):
         pass

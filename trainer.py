@@ -1,5 +1,5 @@
 import os
-
+import torch
 import datasets
 import argparse
 import systems
@@ -7,18 +7,22 @@ from pydlutils.torch import seed
 from loguru import logger
 from datetime import datetime
 from utils.misc import load_config
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Trainer:
-    def __init__(self, cfg):
-        self.cfg = cfg
+    def __init__(self, config):
+        self.cfg = config.trainer
+        self.config = config
+        self.device = torch.device("cuda")
+        self.writer = SummaryWriter(f"{config.exp_dir}/{config.trial_name}")
         self.global_step = 0
 
     def validate(self, system, datamodule):
         dataloader = datamodule.val_dataloader()
         system.model.eval()
         for bidx, batch in enumerate(dataloader):
-            system.on_validation_batch_start(batch, bidx)
+            system.on_validation_batch_start(batch, bidx, dataloader.dataset)
             system.validation_step(batch, bidx)
         system.model.train()
 
@@ -26,28 +30,29 @@ class Trainer:
         dataloader = datamodule.test_dataloader()
         system.model.eval()
         for bidx, batch in enumerate(dataloader):
-            system.on_test_batch_start(batch, bidx)
+            system.on_test_batch_start(batch, bidx, dataloader.dataset)
             system.test_step(batch, bidx)
 
     def train(self, system, datamodule, ckpt_path):
         max_epoch = self.cfg.get("max_epoch", 1)
         cfg = self.cfg
+        system.setup(self.writer, self.device)
+        datamodule.setup(stage=None, device=self.device)
         optim = system.configure_optimizers()
         optimizer = optim["optimizer"]
-        scheduler = optim["lr_scheduler"]
-        datamodule.setup()
+        scheduler = optim["lr_scheduler"]["scheduler"]
         for epoch in range(max_epoch):
             dataloader = datamodule.train_dataloader()
             system.model.train()
             for batch_idx, batch in enumerate(dataloader):
-                self.global_step += 1
                 optimizer.zero_grad()
-                system.on_train_batch_start(batch, batch_idx)
+                system.update_status(epoch, self.global_step)
+                system.on_train_batch_start(batch, batch_idx, dataloader.dataset)
                 loss = system.training_step(batch, batch_idx)
                 loss["loss"].backward()
                 optimizer.step()
                 scheduler.step()
-
+                self.global_step += 1
                 if self.global_step % cfg.log_every_n_steps == 0:
                     logger.info(f"Epoch {epoch}: {self.global_step}/{cfg.max_steps}")
 
@@ -93,7 +98,6 @@ def main():
     config.ckpt_dir = os.path.join(config.exp_dir, config.trial_name, "ckpt")
     config.code_dir = os.path.join(config.exp_dir, config.trial_name, "code")
     config.config_dir = os.path.join(config.exp_dir, config.trial_name, "config")
-
     seed.set_seed(config.seed)
     dm = datasets.make(config.dataset.name, config.dataset)
     system = systems.make(
@@ -101,8 +105,7 @@ def main():
         config,
         load_from_checkpoint=None if not args.resume_weights_only else args.resume,
     )
-    system = None
-    trainer = Trainer(config.trainer)
+    trainer = Trainer(config)
     trainer.train(system, dm, ckpt_path=args.resume)
 
 
