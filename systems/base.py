@@ -1,12 +1,11 @@
-import pytorch_lightning as pl
-
 import models
 from systems.utils import parse_optimizer, parse_scheduler, update_module_step
 from utils.mixins import SaverMixin
 from utils.misc import config_to_primitive, get_rank
+from torch.utils.tensorboard import SummaryWriter
 
 
-class BaseSystem(pl.LightningModule, SaverMixin):
+class BaseSystem(SaverMixin):
     """
     Two ways to print to console:
     1. self.print: correctly handle progress bar
@@ -18,7 +17,23 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         self.config = config
         self.rank = get_rank()
         self.prepare()
+        self.writer: SummaryWriter = None
+        self.device = None
         self.model = models.make(self.config.model.name, self.config.model)
+
+    def setup(self, writer, device):
+        self.device = device
+        self.writer = writer
+        self.model.to(device)
+
+    def update_status(self, current_epoch, global_step):
+        self.current_epoch = current_epoch
+        self.global_step = global_step
+
+    def add_scalar(self, tag, value):
+        if self.global_step % 100 != 0 and tag.startswith("train"):
+            return
+        self.writer.add_scalar(tag, value, global_step=self.global_step)
 
     def prepare(self):
         pass
@@ -54,37 +69,17 @@ class BaseSystem(pl.LightningModule, SaverMixin):
     def preprocess_data(self, batch, stage):
         pass
 
-    """
-    Implementing on_after_batch_transfer of DataModule does the same.
-    But on_after_batch_transfer does not support DP.
-    """
-
-    def on_train_batch_start(self, batch, batch_idx, unused=0):
-        self.dataset = self.trainer.datamodule.train_dataloader().dataset
+    def on_train_batch_start(self, batch, dataset):
+        self.dataset = dataset
         self.preprocess_data(batch, "train")
-        print("##############################")
-        print(self.current_epoch, self.global_step)
         update_module_step(self.model, self.current_epoch, self.global_step)
 
-    def on_validation_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        self.dataset = self.trainer.datamodule.val_dataloader().dataset
-        self.preprocess_data(batch, "validation")
-        update_module_step(self.model, self.current_epoch, self.global_step)
-
-    def on_test_batch_start(self, batch, batch_idx, dataloader_idx=0):
-        self.dataset = self.trainer.datamodule.test_dataloader().dataset
+    def on_test_batch_start(self, batch, dataset):
+        self.dataset = dataset
         self.preprocess_data(batch, "test")
         update_module_step(self.model, self.current_epoch, self.global_step)
 
-    def on_predict_batch_start(self, batch, batch_idx, dataloader_idx):
-        self.dataset = self.trainer.datamodule.predict_dataloader().dataset
-        self.preprocess_data(batch, "predict")
-        update_module_step(self.model, self.current_epoch, self.global_step)
-
     def training_step(self, batch, batch_idx):
-        raise NotImplementedError
-
-    def validation_step(self, batch, batch_idx):
         raise NotImplementedError
 
     def test_step(self, batch, batch_idx):
@@ -94,16 +89,8 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         raise NotImplementedError
 
     def configure_optimizers(self):
-        optim = parse_optimizer(self.config.system.optimizer, self.model)
-        ret = {
-            "optimizer": optim,
-        }
-        if "scheduler" in self.config.system:
-            ret.update(
-                {
-                    "lr_scheduler": parse_scheduler(
-                        self.config.system.scheduler, optim
-                    ),
-                }
-            )
-        return ret
+        optimizer = parse_optimizer(self.config.system.optimizer, self.model)
+        scheduler = parse_scheduler(self.config.system.scheduler, optimizer)[
+            "scheduler"
+        ]
+        return optimizer, scheduler

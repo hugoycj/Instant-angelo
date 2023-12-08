@@ -5,11 +5,11 @@ from torch_efficient_distloss import flatten_eff_distloss
 
 import systems
 from models.ray_utils import get_rays
-from systems.base_new import BaseSystem
+from systems.base import BaseSystem
 from systems.criterions import PSNR, binary_cross_entropy
 
 
-@systems.register("neus-system-new")
+@systems.register("neus-system")
 class NeuSSystem(BaseSystem):
     """
     Two ways to print to console:

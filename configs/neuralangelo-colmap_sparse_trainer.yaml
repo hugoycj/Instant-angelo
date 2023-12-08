@@ -117,7 +117,7 @@ model:
     color_activation: sigmoid
 
 system:
-  name: neus-system-new
+  name: neus-system
   loss:
     lambda_sdf_l1: [0, 1, 0, 20000]
     lambda_normal: 0.
