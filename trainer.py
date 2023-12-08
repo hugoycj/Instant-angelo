@@ -45,7 +45,7 @@ class Trainer:
                 optimizer.step()
                 scheduler.step()
                 self.global_step += 1
-                if self.global_step % cfg.log_every_n_steps == 0:
+                if self.global_step % cfg.log_every_n_steps == 0 or batch_idx == 0:
                     logger.info(f"Epoch {epoch}: {self.global_step}/{cfg.max_steps}")
 
                 if self.global_step % cfg.val_check_interval == 0:

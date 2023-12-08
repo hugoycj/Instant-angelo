@@ -90,7 +90,7 @@ class MarchingCubeHelper(nn.Module):
 
     def forward_(self, level, threshold=0.0):
         if self.method == "CuMCubes":
-            verts, faces = self.mc_func(-level.to(self.device("cuda")), threshold)
+            verts, faces = self.mc_func(-level, threshold)
             verts, faces = verts.cpu(), faces.cpu().long()
         else:
             verts, faces = self.mc_func(
