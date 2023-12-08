@@ -1,4 +1,3 @@
-import os
 import torch
 import datasets
 import argparse
@@ -45,7 +44,7 @@ class Trainer:
                 optimizer.step()
                 scheduler.step()
                 self.global_step += 1
-                if self.global_step % cfg.log_every_n_steps == 0:
+                if self.global_step % cfg.log_every_n_steps == 0 or batch_idx == 0:
                     logger.info(f"Epoch {epoch}: {self.global_step}/{cfg.max_steps}")
 
                 if self.global_step % cfg.val_check_interval == 0:
@@ -61,27 +60,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="path to config file")
     parser.add_argument("--gpu", default="0", help="GPU(s) to be used")
-    parser.add_argument(
-        "--resume", default=None, help="path to the weights to be resumed"
-    )
-    parser.add_argument(
-        "--resume_weights_only",
-        action="store_true",
-        help="specify this argument to restore only the weights (w/o training states), e.g. --resume path/to/resume --resume_weights_only",
-    )
-
+    parser.add_argument("--resume", default=None, help="path to the weights")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--train", action="store_true")
-    group.add_argument("--validate", action="store_true")
     group.add_argument("--test", action="store_true")
-    group.add_argument("--predict", action="store_true")
-    # group.add_argument('--export', action='store_true') # TODO: a separate export action
-
     parser.add_argument("--exp_dir", default="./exp")
-    parser.add_argument("--runs_dir", default="./runs")
-    parser.add_argument(
-        "--verbose", action="store_true", help="if true, set logging level to DEBUG"
-    )
 
     args, extras = parser.parse_known_args()
     # parse YAML config to OmegaConf
@@ -90,15 +73,12 @@ def main():
     config.trial_name = f"{config.tag}{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     config.exp_dir = f"{args.exp_dir}/{config.name}"
     config.save_dir = f"{config.exp_dir}/{config.trial_name}/save"
-    config.ckpt_dir = os.path.join(config.exp_dir, config.trial_name, "ckpt")
-    config.code_dir = os.path.join(config.exp_dir, config.trial_name, "code")
-    config.config_dir = os.path.join(config.exp_dir, config.trial_name, "config")
     seed.set_seed(config.seed)
     dm = datasets.make(config.dataset.name, config.dataset)
     system = systems.make(
         config.system.name,
         config,
-        load_from_checkpoint=None if not args.resume_weights_only else args.resume,
+        load_from_checkpoint=args.resume,
     )
     trainer = Trainer(config)
     trainer.train(system, dm, ckpt_path=args.resume)

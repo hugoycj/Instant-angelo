@@ -11,6 +11,7 @@ ENV TCNN_CUDA_ARCHITECTURES=70,80,86
 ## CUDA Home, required to find CUDA in some packages.
 ENV CUDA_HOME="/usr/local/cuda"
 ENV CUDA_DEVICE_ORDER="PCI_BUS_ID"
+ENV TORCH_CUDA_ARCH_LIST="3.5;5.0;6.0;7.0;7.5;8.0;8.6"
 
 
 # Install required apt packages.
