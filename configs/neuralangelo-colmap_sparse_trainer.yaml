@@ -16,8 +16,8 @@ dataset:
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 512
-  train_num_rays: 128
+  num_samples_per_ray: 128
+  train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
   grid_prune_occ_thre: 0.001

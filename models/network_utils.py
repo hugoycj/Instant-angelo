@@ -54,7 +54,7 @@ class ProgressiveBandHashGrid(nn.Module):
         self.n_input_dims = in_channels
         encoding_config = config.copy()
         encoding_config["otype"] = "HashGrid"
-        with torch.cuda.device(get_rank()):
+        with torch.cuda.device("cuda"):
             self.encoding = tcnn.Encoding(in_channels, encoding_config)
         self.n_output_dims = self.encoding.n_output_dims
         self.n_level = config["n_levels"]

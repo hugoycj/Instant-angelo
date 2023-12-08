@@ -1,7 +1,5 @@
 import os
 from omegaconf import OmegaConf
-from packaging import version
-
 
 # ============ Register OmegaConf Recolvers ============= #
 OmegaConf.register_new_resolver(
@@ -51,7 +49,3 @@ def get_rank():
         if rank is not None:
             return int(rank)
     return 0
-
-
-def parse_version(ver):
-    return version.parse(ver)

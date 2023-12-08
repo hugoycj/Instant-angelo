@@ -16,7 +16,6 @@ from datasets.colmap_utils import (
     read_points3d_binary,
 )
 from models.ray_utils import get_ray_directions
-from utils.misc import get_rank
 from models.utils import scale_anything
 from nerfacc import ContractionType
 
@@ -246,7 +245,6 @@ class ColmapDatasetBase:
     def setup(self, config, split):
         self.config = config
         self.split = split
-        self.rank = get_rank()
 
         if not ColmapDatasetBase.initialized:
             camdata = read_cameras_binary(

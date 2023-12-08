@@ -385,14 +385,14 @@ class NeuSModel(BaseModel):
         return losses
 
     @torch.no_grad()
-    def export(self, export_config):
+    def export(self, export_config, device):
         mesh = self.isosurface()
         if export_config.export_vertex_color:
             _, sdf_grad, features = chunk_batch(
                 self.geometry,
                 export_config.chunk_size,
                 False,
-                mesh["v_pos"].to(self.rank),
+                mesh["v_pos"].to(device),
                 with_grad=True,
                 with_feature=True,
             )

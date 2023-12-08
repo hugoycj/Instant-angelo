@@ -1,21 +1,14 @@
 import models
 from systems.utils import parse_optimizer, parse_scheduler, update_module_step
 from utils.mixins import SaverMixin
-from utils.misc import config_to_primitive, get_rank
+from utils.misc import config_to_primitive
 from torch.utils.tensorboard import SummaryWriter
 
 
 class BaseSystem(SaverMixin):
-    """
-    Two ways to print to console:
-    1. self.print: correctly handle progress bar
-    2. rank_zero_info: use the logging module
-    """
-
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.rank = get_rank()
         self.prepare()
         self.writer: SummaryWriter = None
         self.device = None
@@ -67,7 +60,7 @@ class BaseSystem(SaverMixin):
         return value
 
     def preprocess_data(self, batch, stage):
-        pass
+        raise NotImplementedError
 
     def on_train_batch_start(self, batch, dataset):
         self.dataset = dataset

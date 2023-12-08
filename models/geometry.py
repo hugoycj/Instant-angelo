@@ -9,9 +9,9 @@ import models
 from models.base import BaseModel
 from models.utils import scale_anything, get_activation, cleanup
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
-from utils.misc import get_rank
 from systems.utils import update_module_step
 from nerfacc import ContractionType
+from loguru import logger
 
 import trimesh
 
@@ -69,7 +69,7 @@ class MarchingCubeHelper(nn.Module):
         self.y_grid = torch.arange(y_min, y_max, self.intv)
         self.z_grid = torch.arange(z_min, z_max, self.intv)
         res_x, res_y, res_z = len(self.x_grid), len(self.y_grid), len(self.z_grid)
-        print("Extracting surface at resolution", res_x, res_y, res_z)
+        logger.info(f"Extracting surface at resolution:{res_x}, {res_y}, {res_z}")
         self.num_blocks_x = int(np.ceil(res_x / self.block_res))
         self.num_blocks_y = int(np.ceil(res_y / self.block_res))
         self.num_blocks_z = int(np.ceil(res_z / self.block_res))
@@ -90,7 +90,7 @@ class MarchingCubeHelper(nn.Module):
 
     def forward_(self, level, threshold=0.0):
         if self.method == "CuMCubes":
-            verts, faces = self.mc_func(-level.to(get_rank()), threshold)
+            verts, faces = self.mc_func(-level.to(self.device("cuda")), threshold)
             verts, faces = verts.cpu(), faces.cpu().long()
         else:
             verts, faces = self.mc_func(
@@ -437,7 +437,7 @@ class VolumeSDF(BaseImplicitGeometry):
             )
             grid_size = 2 * self.config.radius / grid_res
             if grid_size != self._finite_difference_eps:
-                logger.info(f"Update finite_difference_eps to {grid_size}")
+                logger.info(f"Update finite_difference_eps to {grid_size:.4f}")
             self._finite_difference_eps = grid_size
         else:
             raise ValueError(

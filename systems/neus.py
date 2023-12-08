@@ -11,12 +11,6 @@ from systems.criterions import PSNR, binary_cross_entropy
 
 @systems.register("neus-system")
 class NeuSSystem(BaseSystem):
-    """
-    Two ways to print to console:
-    1. self.print: correctly handle progress bar
-    2. rank_zero_info: use the logging module
-    """
-
     def prepare(self):
         self.criterions = {"psnr": PSNR()}
         self.train_num_samples = self.config.model.train_num_rays * (
@@ -81,9 +75,9 @@ class NeuSSystem(BaseSystem):
             rgb = (
                 self.dataset.all_images[index, y, x]
                 .view(-1, self.dataset.all_images.shape[-1])
-                .to(self.rank)
+                .to(self.device)
             )
-            fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1).to(self.rank)
+            fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1).to(self.device)
         else:
             c2w = self.dataset.all_c2w[index][0]
             pts = torch.tensor([])
@@ -97,9 +91,9 @@ class NeuSSystem(BaseSystem):
             rgb = (
                 self.dataset.all_images[index]
                 .view(-1, self.dataset.all_images.shape[-1])
-                .to(self.rank)
+                .to(self.device)
             )
-            fg_mask = self.dataset.all_fg_masks[index].view(-1).to(self.rank)
+            fg_mask = self.dataset.all_fg_masks[index].view(-1).to(self.device)
 
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
@@ -285,7 +279,7 @@ class NeuSSystem(BaseSystem):
         return {"psnr": psnr, "index": batch["index"]}
 
     def export(self):
-        mesh = self.model.export(self.config.export)
+        mesh = self.model.export(self.config.export, device=self.device)
         self.save_mesh(
             f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
             **mesh,
