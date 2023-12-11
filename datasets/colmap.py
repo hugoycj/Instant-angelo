@@ -5,7 +5,7 @@ from PIL import Image
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader, IterableDataset
+from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.functional as TF
 import open3d as o3d
 
@@ -429,9 +429,9 @@ class ColmapDataset(Dataset):
 
     def __getitem__(self, index):
         if self.split == "train":
-            return {"index": index}
-        else:
             return {}
+        else:
+            return {"index": index}
 
 
 @datasets.register("colmap")
@@ -454,7 +454,7 @@ class ColmapDataModule:
     def general_loader(self, dataset, batch_size):
         return DataLoader(
             dataset,
-            num_workers=os.cpu_count(),
+            num_workers=4,
             batch_size=batch_size,
             pin_memory=True,
             sampler=None,

@@ -60,25 +60,24 @@ class VarianceNetwork(nn.Module):
 @models.register("neus")
 class NeuSModel(BaseModel):
     def setup(self):
+        # object
         self.geometry = models.make(self.config.geometry.name, self.config.geometry)
         self.texture = models.make(self.config.texture.name, self.config.texture)
         self.geometry.contraction_type = ContractionType.AABB
-
-        if self.config.learned_background:
-            self.geometry_bg = models.make(
-                self.config.geometry_bg.name, self.config.geometry_bg
-            )
-            self.texture_bg = models.make(
-                self.config.texture_bg.name, self.config.texture_bg
-            )
-            self.geometry_bg.contraction_type = ContractionType.UN_BOUNDED_SPHERE
-            self.near_plane_bg, self.far_plane_bg = 0.1, 1e3
-            self.cone_angle_bg = (
-                10
-                ** (math.log10(self.far_plane_bg) / self.config.num_samples_per_ray_bg)
-                - 1.0
-            )
-            self.render_step_size_bg = 0.01
+        # backgroud
+        self.geometry_bg = models.make(
+            self.config.geometry_bg.name, self.config.geometry_bg
+        )
+        self.texture_bg = models.make(
+            self.config.texture_bg.name, self.config.texture_bg
+        )
+        self.geometry_bg.contraction_type = ContractionType.UN_BOUNDED_SPHERE
+        self.near_plane_bg, self.far_plane_bg = 0.1, 1e3
+        self.cone_angle_bg = (
+            10 ** (math.log10(self.far_plane_bg) / self.config.num_samples_per_ray_bg)
+            - 1.0
+        )
+        self.render_step_size_bg = 0.01
 
         self.variance = VarianceNetwork(self.config.variance)
         self.register_buffer(
@@ -101,14 +100,13 @@ class NeuSModel(BaseModel):
                 resolution=128,
                 contraction_type=ContractionType.AABB,
             )
-            if self.config.learned_background:
-                self.occupancy_grid_bg = OccupancyGrid(
-                    roi_aabb=self.scene_aabb,
-                    resolution=256,
-                    contraction_type=ContractionType.UN_BOUNDED_SPHERE,
-                )
+
+            self.occupancy_grid_bg = OccupancyGrid(
+                roi_aabb=self.scene_aabb,
+                resolution=256,
+                contraction_type=ContractionType.UN_BOUNDED_SPHERE,
+            )
         self.randomized = self.config.randomized
-        self.background_color = None
         self.render_step_size = (
             1.732 * 2 * self.config.radius / self.config.num_samples_per_ray
         )
@@ -116,9 +114,10 @@ class NeuSModel(BaseModel):
     def update_step(self, epoch, global_step):
         update_module_step(self.geometry, epoch, global_step)
         update_module_step(self.texture, epoch, global_step)
-        if self.config.learned_background:
-            update_module_step(self.geometry_bg, epoch, global_step)
-            update_module_step(self.texture_bg, epoch, global_step)
+
+        update_module_step(self.geometry_bg, epoch, global_step)
+        update_module_step(self.texture_bg, epoch, global_step)
+
         update_module_step(self.variance, epoch, global_step)
 
         cos_anneal_end = self.config.get("cos_anneal_end", 0)
@@ -150,12 +149,11 @@ class NeuSModel(BaseModel):
                 occ_eval_fn=occ_eval_fn,
                 occ_thre=self.config.get("grid_prune_occ_thre", 0.01),
             )
-            if self.config.learned_background:
-                self.occupancy_grid_bg.every_n_step(
-                    step=global_step,
-                    occ_eval_fn=occ_eval_fn_bg,
-                    occ_thre=self.config.get("grid_prune_occ_thre_bg", 0.01),
-                )
+            self.occupancy_grid_bg.every_n_step(
+                step=global_step,
+                occ_eval_fn=occ_eval_fn_bg,
+                occ_thre=self.config.get("grid_prune_occ_thre_bg", 0.01),
+            )
 
     def isosurface(self):
         mesh = self.geometry.isosurface()
@@ -243,7 +241,6 @@ class NeuSModel(BaseModel):
         comp_rgb = accumulate_along_rays(
             weights, ray_indices, values=rgb, n_rays=n_rays
         )
-        comp_rgb = comp_rgb + self.background_color * (1.0 - opacity)
 
         out = {
             "comp_rgb": comp_rgb,
@@ -342,14 +339,7 @@ class NeuSModel(BaseModel):
             )
             out.update({"sdf_laplace_samples": sdf_laplace})
 
-        if self.config.learned_background:
-            out_bg = self.forward_bg_(rays)
-        else:
-            out_bg = {
-                "comp_rgb": self.background_color[None, :].expand(*comp_rgb.shape),
-                "num_samples": torch.zeros_like(out["num_samples"]),
-                "rays_valid": torch.zeros_like(out["rays_valid"]),
-            }
+        out_bg = self.forward_bg_(rays)
 
         out_full = {
             "comp_rgb": out["comp_rgb"] + out_bg["comp_rgb"] * (1.0 - out["opacity"]),
@@ -487,14 +477,7 @@ class SphericalHarmonicNeuSModel(NeuSModel):
             )
             out.update({"sdf_laplace_samples": sdf_laplace})
 
-        if self.config.learned_background:
-            out_bg = self.forward_bg_(rays)
-        else:
-            out_bg = {
-                "comp_rgb": self.background_color[None, :].expand(*comp_rgb.shape),
-                "num_samples": torch.zeros_like(out["num_samples"]),
-                "rays_valid": torch.zeros_like(out["rays_valid"]),
-            }
+        out_bg = self.forward_bg_(rays)
 
         out_full = {
             "comp_rgb": out["comp_rgb"] + out_bg["comp_rgb"] * (1.0 - out["opacity"]),

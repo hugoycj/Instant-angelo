@@ -91,18 +91,6 @@ class NeuSSystem(BaseSystem):
 
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
-        if stage in ["train"]:
-            if self.config.model.background_color == "white":
-                self.model.background_color = torch.ones((3,), dtype=torch.float32)
-            elif self.config.model.background_color == "random":
-                self.model.background_color = torch.rand((3,), dtype=torch.float32)
-            else:
-                raise NotImplementedError
-        else:
-            self.model.background_color = torch.ones((3,), dtype=torch.float32)
-
-        self.model.background_color = self.model.background_color.to(self.device)
-
         batch.update(
             {
                 "rays": rays,
@@ -177,11 +165,8 @@ class NeuSSystem(BaseSystem):
             )
             self.add_scalar("train/loss_distortion", loss_distortion)
             loss += loss_distortion * self.C(self.config.system.loss.lambda_distortion)
-
-        if (
-            self.config.model.learned_background
-            and self.C(self.config.system.loss.lambda_distortion_bg) > 0
-        ):
+        # backgound
+        if self.C(self.config.system.loss.lambda_distortion_bg) > 0:
             loss_distortion_bg = flatten_eff_distloss(
                 out["weights_bg"],
                 out["points_bg"],

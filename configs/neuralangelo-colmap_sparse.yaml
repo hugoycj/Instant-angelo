@@ -25,7 +25,6 @@ model:
   randomized: true
   ray_chunk: 2048
   cos_anneal_end: 20000
-  learned_background: true
   background_color: random
   variance:
     init_val: 0.3
