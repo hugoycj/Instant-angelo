@@ -243,14 +243,11 @@ def get_rays(directions, c2w, keepdim=False):
     # Rotate ray directions from camera coordinate to the world coordinate
     # rays_d = directions @ c2w[:, :3].T # (H, W, 3) # slow?
     assert directions.shape[-1] == 3
-    print(directions.shape)
-
     if directions.ndim == 2:  # (N_rays, 3)
         assert c2w.ndim == 3  # (N_rays, 4, 4) / (1, 4, 4)
         rays_d = (directions[:, None, :] * c2w[:, :3, :3]).sum(-1)  # (N_rays, 3)
         rays_o = c2w[:, :, 3].expand(rays_d.shape)
     elif directions.ndim == 3:  # (H, W, 3)
-        print(c2w.shape)
         if c2w.ndim == 2:  # (4, 4)
             rays_d = (directions[:, :, None, :] * c2w[None, None, :3, :3]).sum(
                 -1
@@ -466,6 +463,7 @@ class ColmapDatasetBase(Dataset):
 
     def __getitem__(self, index):
         cfg = self.config
+        index = [index]
         if self.split == "train":
             if cfg.batch_image_sampling:
                 index = torch.randint(
@@ -493,7 +491,6 @@ class ColmapDatasetBase(Dataset):
 
         if self.split == "train":
             c2w = self.all_c2w[index]
-            print(f"self.all_c2w shape: {self.all_c2w.shape}")
 
             # sample the same number of points as the ray
             pts_index = torch.randint(
@@ -537,6 +534,7 @@ class ColmapDatasetBase(Dataset):
             bg_color = torch.ones((3,), dtype=torch.float32, device=self.device)
 
         return {
+            "index": index,
             "rays": rays,
             "rgb": rgb,
             "pts": pts,
