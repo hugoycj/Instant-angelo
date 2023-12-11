@@ -1,4 +1,6 @@
 import os
+import sys
+import copy
 import math
 import numpy as np
 from PIL import Image
@@ -237,14 +239,47 @@ def error_to_confidence(error):
     return confidence
 
 
-class ColmapDatasetBase:
+def get_rays(directions, c2w, keepdim=False):
+    # Rotate ray directions from camera coordinate to the world coordinate
+    # rays_d = directions @ c2w[:, :3].T # (H, W, 3) # slow?
+    assert directions.shape[-1] == 3
+    print(directions.shape)
+
+    if directions.ndim == 2:  # (N_rays, 3)
+        assert c2w.ndim == 3  # (N_rays, 4, 4) / (1, 4, 4)
+        rays_d = (directions[:, None, :] * c2w[:, :3, :3]).sum(-1)  # (N_rays, 3)
+        rays_o = c2w[:, :, 3].expand(rays_d.shape)
+    elif directions.ndim == 3:  # (H, W, 3)
+        print(c2w.shape)
+        if c2w.ndim == 2:  # (4, 4)
+            rays_d = (directions[:, :, None, :] * c2w[None, None, :3, :3]).sum(
+                -1
+            )  # (H, W, 3)
+            rays_o = c2w[None, None, :, 3].expand(rays_d.shape)
+        elif c2w.ndim == 3:  # (B, 4, 4)
+            rays_d = (directions[None, :, :, None, :] * c2w[:, None, None, :3, :3]).sum(
+                -1
+            )  # (B, H, W, 3)
+            rays_o = c2w[:, None, None, :, 3].expand(rays_d.shape)
+
+    if not keepdim:
+        rays_o, rays_d = rays_o.reshape(-1, 3), rays_d.reshape(-1, 3)
+
+    return rays_o, rays_d
+
+
+class ColmapDatasetBase(Dataset):
     # the data only has to be processed once
     initialized = False
     properties = {}
 
-    def setup(self, config, split):
+    def __init__(self, config, split):
         self.config = config
         self.split = split
+        self.train_num_rays = self.config.train_num_rays
+        self.train_num_samples = self.config.train_num_rays * (
+            self.config.num_samples_per_ray + self.config.num_samples_per_ray_bg
+        )
 
         if not ColmapDatasetBase.initialized:
             camdata = read_cameras_binary(
@@ -407,6 +442,7 @@ class ColmapDatasetBase:
         )  # points normalized to (0, 1)
 
     def to_device(self, device: torch.device):
+        self.device = device
         self.all_images = self.all_images.to(device)
         self.all_c2w = self.all_c2w.to(device)
         self.all_points = self.all_points.to(device)
@@ -421,25 +457,151 @@ class ColmapDatasetBase:
         occ_mask = min_dist < radius
         return occ_mask
 
-
-class ColmapDataset(Dataset, ColmapDatasetBase):
-    def __init__(self, config, split):
-        self.setup(config, split)
-
     def __len__(self):
         return len(self.all_images)
 
+    # def __getitem__(self, index):
+    #     if self.split == "train":
+    #     return {"index": index}
+
     def __getitem__(self, index):
-        return {"index": index}
+        cfg = self.config
+        if self.split == "train":
+            if cfg.batch_image_sampling:
+                index = torch.randint(
+                    0,
+                    len(self.all_images),
+                    size=(self.train_num_rays,),
+                    device=self.device,
+                )
+                x = torch.randint(
+                    0,
+                    self.w,
+                    size=(self.train_num_rays,),
+                    device=self.device,
+                )
+                y = torch.randint(
+                    0,
+                    self.h,
+                    size=(self.train_num_rays,),
+                    device=self.device,
+                )
+            else:
+                index = torch.randint(0, len(self.all_images), size=(1,))
+                x = torch.randint(0, self.w, size=(self.train_num_rays,))
+                y = torch.randint(0, self.h, size=(self.train_num_rays,))
+
+        if self.split == "train":
+            c2w = self.all_c2w[index]
+            print(f"self.all_c2w shape: {self.all_c2w.shape}")
+
+            # sample the same number of points as the ray
+            pts_index = torch.randint(
+                0, len(self.all_points), size=(self.train_num_rays,)
+            )
+            pts = self.all_points[pts_index]
+            pts_weights = self.all_points_confidence[pts_index]
+            if self.pts3d_normal is not None:
+                pts_normal = self.pts3d_normal[pts_index]
+            else:
+                pts_normal = torch.tensor([])
+
+            if self.directions.ndim == 3:  # (H, W, 3)
+                directions = self.directions[y, x]
+            elif self.directions.ndim == 4:  # (N, H, W, 3)
+                directions = self.directions[index, y, x]
+            rays_o, rays_d = get_rays(directions, c2w)
+            rgb = self.all_images[index, y, x].view(-1, self.all_images.shape[-1])
+        else:
+            c2w = self.all_c2w[index][0]
+            pts = torch.tensor([])
+            pts_weights = torch.tensor([])
+            pts_normal = torch.tensor([])
+            if self.directions.ndim == 3:  # (H, W, 3)
+                directions = self.directions
+            elif self.directions.ndim == 4:  # (N, H, W, 3)
+                directions = self.directions[index][0]
+            rays_o, rays_d = get_rays(directions, c2w)
+            rgb = self.all_images[index].view(-1, self.all_images.shape[-1])
+
+        rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
+
+        if self.split == "train":
+            if cfg.background_color == "white":
+                bg_color = torch.ones((3,), dtype=torch.float32, device=self.device)
+            elif cfg.background_color == "random":
+                bg_color = torch.rand((3,), dtype=torch.float32, device=self.device)
+            else:
+                raise NotImplementedError
+        else:
+            bg_color = torch.ones((3,), dtype=torch.float32, device=self.device)
+
+        return {
+            "rays": rays,
+            "rgb": rgb,
+            "pts": pts,
+            "pts_normal": pts_normal,
+            "pts_weights": pts_weights,
+            "bg_color": bg_color,
+        }
+
+    def update_ray_num(self, num_samples_full: int):
+        train_num_rays = int(
+            self.train_num_rays * (self.train_num_samples / num_samples_full)
+        )
+        self.train_num_rays = min(
+            int(self.train_num_rays * 0.9 + train_num_rays * 0.1),
+            self.config.max_train_num_rays,
+        )
+        return self.train_num_rays
 
 
-class ColmapIterableDataset(IterableDataset, ColmapDatasetBase):
-    def __init__(self, config, split):
-        self.setup(config, split)
+# class ColmapDataset(Dataset, ColmapDatasetBase):
+#     def __init__(self, config, split):
+#         self.setup(config, split)
+
+#     def __len__(self):
+#         return len(self.all_images)
+
+#     def __getitem__(self, index):
+#         return {"index": index}
+
+
+# class ColmapIterableDataset(IterableDataset, ColmapDatasetBase):
+#     def __init__(self, config, split):
+#         self.setup(config, split)
+
+#     def __iter__(self):
+#         while True:
+#             yield {}
+
+
+class InfiniteDataLoader(DataLoader):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dataset_iterator = super().__iter__()
 
     def __iter__(self):
-        while True:
-            yield {}
+        return self
+
+    def __next__(self):
+        try:
+            batch = next(self.dataset_iterator)
+        except StopIteration:
+            self.dataset_iterator = super().__iter__()
+            batch = next(self.dataset_iterator)
+        return batch
+
+
+def collate_fn(batch):
+    # assert len(batch) == 1
+    # out = {}
+    # for key, value in batch[0].items():
+    #     if isinstance(value, torch.Tensor):
+    #         out[key] = value.to("cpu")
+    #     else:
+    #         out[key] = value
+    return batch[0]
 
 
 @datasets.register("colmap")
@@ -453,10 +615,10 @@ class ColmapDataModule:
         if device is None:
             device = self.device
         if stage in [None, "train"]:
-            self.train_dataset = ColmapIterableDataset(self.config, "train")
+            self.train_dataset = ColmapDatasetBase(self.config, "train")
             self.train_dataset.to_device(device)
         if stage in [None, "test"]:
-            self.test_dataset = ColmapDataset(
+            self.test_dataset = ColmapDatasetBase(
                 self.config, self.config.get("test_split", "test")
             )
             self.test_dataset.to_device(device)
@@ -464,17 +626,58 @@ class ColmapDataModule:
     def prepare_data(self):
         pass
 
-    def general_loader(self, dataset, batch_size):
-        return DataLoader(
+    def general_loader(self, dataset, batch_size, loader):
+        return loader(
             dataset,
-            num_workers=os.cpu_count(),
+            num_workers=0,
             batch_size=batch_size,
-            pin_memory=True,
+            pin_memory=False,
             sampler=None,
+            collate_fn=collate_fn,
         )
 
     def train_dataloader(self):
-        return self.general_loader(self.train_dataset, batch_size=1)
+        return self.general_loader(
+            self.train_dataset, batch_size=1, loader=InfiniteDataLoader
+        )
 
     def test_dataloader(self):
-        return self.general_loader(self.test_dataset, batch_size=1)
+        return self.general_loader(self.test_dataset, batch_size=1, loader=DataLoader)
+
+
+# @datasets.register("colmap")
+# class ColmapDataModule:
+#     def __init__(self, config, device=None):
+#         super().__init__()
+#         self.config = config
+#         self.device = device
+
+#     def setup(self, stage=None, device=None):
+#         if device is None:
+#             device = self.device
+#         if stage in [None, "train"]:
+#             self.train_dataset = ColmapIterableDataset(self.config, "train")
+#             self.train_dataset.to_device(device)
+#         if stage in [None, "test"]:
+#             self.test_dataset = ColmapDataset(
+#                 self.config, self.config.get("test_split", "test")
+#             )
+#             self.test_dataset.to_device(device)
+
+#     def prepare_data(self):
+#         pass
+
+#     def general_loader(self, dataset, batch_size):
+#         return DataLoader(
+#             dataset,
+#             num_workers=os.cpu_count(),
+#             batch_size=batch_size,
+#             pin_memory=True,
+#             sampler=None,
+#         )
+
+#     def train_dataloader(self):
+#         return self.general_loader(self.train_dataset, batch_size=1)
+
+#     def test_dataloader(self):
+#         return self.general_loader(self.test_dataset, batch_size=1)

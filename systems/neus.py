@@ -13,11 +13,11 @@ from systems.criterions import PSNR, binary_cross_entropy
 class NeuSSystem(BaseSystem):
     def prepare(self):
         self.criterions = {"psnr": PSNR()}
-        self.train_num_samples = self.config.model.train_num_rays * (
-            self.config.model.num_samples_per_ray
-            + self.config.model.get("num_samples_per_ray_bg", 0)
-        )
-        self.train_num_rays = self.config.model.train_num_rays
+        # self.train_num_samples = self.config.model.train_num_rays * (
+        #     self.config.model.num_samples_per_ray
+        #     + self.config.model.get("num_samples_per_ray_bg", 0)
+        # )
+        # self.train_num_rays = self.config.model.train_num_rays
         self.sample_foreground_ratio = self.config.dataset.get(
             "sample_foreground_ratio", 1.0
         )
@@ -26,92 +26,98 @@ class NeuSSystem(BaseSystem):
         return self.model(batch["rays"])
 
     def preprocess_data(self, batch, stage):
-        if stage in ["test"]:
-            index = batch["index"]
-        else:
-            if self.config.model.batch_image_sampling:
-                index = torch.randint(
-                    0,
-                    len(self.dataset.all_images),
-                    size=(self.train_num_rays,),
-                    device=self.device,
-                )
-                x = torch.randint(
-                    0,
-                    self.dataset.w,
-                    size=(self.train_num_rays,),
-                    device=self.device,
-                )
-                y = torch.randint(
-                    0,
-                    self.dataset.h,
-                    size=(self.train_num_rays,),
-                    device=self.device,
-                )
-            else:
-                index = torch.randint(0, len(self.dataset.all_images), size=(1,))
-                x = torch.randint(0, self.dataset.w, size=(self.train_num_rays,))
-                y = torch.randint(0, self.dataset.h, size=(self.train_num_rays,))
+        # if stage in ["test"]:
+        #     index = batch["index"]
+        # else:
+        #     if self.config.model.batch_image_sampling:
+        #         index = torch.randint(
+        #             0,
+        #             len(self.dataset.all_images),
+        #             size=(self.train_num_rays,),
+        #             device=self.device,
+        #         )
+        #         x = torch.randint(
+        #             0,
+        #             self.dataset.w,
+        #             size=(self.train_num_rays,),
+        #             device=self.device,
+        #         )
+        #         y = torch.randint(
+        #             0,
+        #             self.dataset.h,
+        #             size=(self.train_num_rays,),
+        #             device=self.device,
+        #         )
+        #     else:
+        #         index = torch.randint(0, len(self.dataset.all_images), size=(1,))
+        #         x = torch.randint(0, self.dataset.w, size=(self.train_num_rays,))
+        #         y = torch.randint(0, self.dataset.h, size=(self.train_num_rays,))
 
-        if stage in ["train"]:
-            c2w = self.dataset.all_c2w[index]
+        # if stage in ["train"]:
+        #     c2w = self.dataset.all_c2w[index]
 
-            # sample the same number of points as the ray
-            pts_index = torch.randint(
-                0, len(self.dataset.all_points), size=(self.train_num_rays,)
-            )
-            pts = self.dataset.all_points[pts_index]
-            pts_weights = self.dataset.all_points_confidence[pts_index]
-            if self.dataset.pts3d_normal is not None:
-                pts_normal = self.dataset.pts3d_normal[pts_index]
-            else:
-                pts_normal = torch.tensor([])
+        #     # sample the same number of points as the ray
+        #     pts_index = torch.randint(
+        #         0, len(self.dataset.all_points), size=(self.train_num_rays,)
+        #     )
+        #     pts = self.dataset.all_points[pts_index]
+        #     pts_weights = self.dataset.all_points_confidence[pts_index]
+        #     if self.dataset.pts3d_normal is not None:
+        #         pts_normal = self.dataset.pts3d_normal[pts_index]
+        #     else:
+        #         pts_normal = torch.tensor([])
 
-            if self.dataset.directions.ndim == 3:  # (H, W, 3)
-                directions = self.dataset.directions[y, x]
-            elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
-                directions = self.dataset.directions[index, y, x]
-            rays_o, rays_d = get_rays(directions, c2w)
-            rgb = self.dataset.all_images[index, y, x].view(
-                -1, self.dataset.all_images.shape[-1]
-            )
-        else:
-            c2w = self.dataset.all_c2w[index][0]
-            pts = torch.tensor([])
-            pts_weights = torch.tensor([])
-            pts_normal = torch.tensor([])
-            if self.dataset.directions.ndim == 3:  # (H, W, 3)
-                directions = self.dataset.directions
-            elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
-                directions = self.dataset.directions[index][0]
-            rays_o, rays_d = get_rays(directions, c2w)
-            rgb = self.dataset.all_images[index].view(
-                -1, self.dataset.all_images.shape[-1]
-            )
+        #     if self.dataset.directions.ndim == 3:  # (H, W, 3)
+        #         directions = self.dataset.directions[y, x]
+        #     elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
+        #         directions = self.dataset.directions[index, y, x]
+        #     rays_o, rays_d = get_rays(directions, c2w)
+        #     rgb = self.dataset.all_images[index, y, x].view(
+        #         -1, self.dataset.all_images.shape[-1]
+        #     )
+        # else:
+        #     c2w = self.dataset.all_c2w[index][0]
+        #     pts = torch.tensor([])
+        #     pts_weights = torch.tensor([])
+        #     pts_normal = torch.tensor([])
+        #     if self.dataset.directions.ndim == 3:  # (H, W, 3)
+        #         directions = self.dataset.directions
+        #     elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
+        #         directions = self.dataset.directions[index][0]
+        #     rays_o, rays_d = get_rays(directions, c2w)
+        #     rgb = self.dataset.all_images[index].view(
+        #         -1, self.dataset.all_images.shape[-1]
+        #     )
 
-        rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
+        # rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
-        if stage in ["train"]:
-            if self.config.model.background_color == "white":
-                self.model.background_color = torch.ones((3,), dtype=torch.float32)
-            elif self.config.model.background_color == "random":
-                self.model.background_color = torch.rand((3,), dtype=torch.float32)
-            else:
-                raise NotImplementedError
-        else:
-            self.model.background_color = torch.ones((3,), dtype=torch.float32)
+        # if stage in ["train"]:
+        #     if self.config.model.background_color == "white":
+        #         self.model.background_color = torch.ones((3,), dtype=torch.float32)
+        #     elif self.config.model.background_color == "random":
+        #         self.model.background_color = torch.rand((3,), dtype=torch.float32)
+        #     else:
+        #         raise NotImplementedError
+        # else:
+        #     self.model.background_color = torch.ones((3,), dtype=torch.float32)
 
-        self.model.background_color = self.model.background_color.to(self.device)
+        # self.model.background_color = self.model.background_color.to(self.device)
 
-        batch.update(
-            {
-                "rays": rays,
-                "rgb": rgb,
-                "pts": pts,
-                "pts_normal": pts_normal,
-                "pts_weights": pts_weights,
-            }
-        )
+        # batch.update(
+        #     {
+        #         "rays": rays,
+        #         "rgb": rgb,
+        #         "pts": pts,
+        #         "pts_normal": pts_normal,
+        #         "pts_weights": pts_weights,
+        #     }
+        # )
+        # for key, value in batch.items():
+        #     if isinstance(value, torch.Tensor):
+        #         batch[key] = value.to(self.device)
+        #     else:
+        #         batch[key] = value
+        self.model.background_color = batch["bg_color"]
 
     def training_step(self, batch, batch_idx):
         out = self.forward(batch)
@@ -119,15 +125,18 @@ class NeuSSystem(BaseSystem):
         loss = 0.0
 
         # update train_num_rays
-        if self.config.model.dynamic_ray_sampling:
-            train_num_rays = int(
-                self.train_num_rays
-                * (self.train_num_samples / out["num_samples_full"].sum().item())
-            )
-            self.train_num_rays = min(
-                int(self.train_num_rays * 0.9 + train_num_rays * 0.1),
-                self.config.model.max_train_num_rays,
-            )
+        # if self.config.model.dynamic_ray_sampling:
+        #     train_num_rays = self.dataset.update_ray_num(
+        #         out["num_samples_full"].sum().item()
+        #     )
+        # train_num_rays = int(
+        #     self.train_num_rays
+        #     * (self.train_num_samples / out["num_samples_full"].sum().item())
+        # )
+        # self.train_num_rays = min(
+        #     int(self.train_num_rays * 0.9 + train_num_rays * 0.1),
+        #     self.config.model.max_train_num_rays,
+        # )
 
         loss_rgb_mse = F.mse_loss(
             out["comp_rgb_full"][out["rays_valid_full"][..., 0]],
@@ -228,7 +237,7 @@ class NeuSSystem(BaseSystem):
             if name.startswith("lambda"):
                 self.add_scalar(f"train_params/{name}", self.C(value))
 
-        self.add_scalar("train/num_rays", float(self.train_num_rays))
+        # self.add_scalar("train/num_rays", float(train_num_rays))
 
         return {"loss": loss}
 
