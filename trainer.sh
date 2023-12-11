@@ -18,7 +18,7 @@ colmap model_converter \
 exp_dir="/mnt/nas/share-all/caizebin/07.cache/nerf/nerfsudio/output"
 echo "---angelo_recon---"
 python trainer.py \
-    --config configs/neuralangelo-colmap_sparse_trainer.yaml \
+    --config configs/neuralangelo-colmap_sparse.yaml \
     --gpu 1 \
     --train \
     --exp_dir ${exp_dir} \

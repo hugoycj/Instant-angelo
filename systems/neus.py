@@ -26,7 +26,7 @@ class NeuSSystem(BaseSystem):
         return self.model(batch["rays"])
 
     def preprocess_data(self, batch, stage):
-        if stage in ["test", "validation", "predict"]:
+        if stage in ["test"]:
             index = batch["index"]
         else:
             if self.config.model.batch_image_sampling:
@@ -72,12 +72,9 @@ class NeuSSystem(BaseSystem):
             elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
                 directions = self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
-            rgb = (
-                self.dataset.all_images[index, y, x]
-                .view(-1, self.dataset.all_images.shape[-1])
-                .to(self.device)
+            rgb = self.dataset.all_images[index, y, x].view(
+                -1, self.dataset.all_images.shape[-1]
             )
-            fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1).to(self.device)
         else:
             c2w = self.dataset.all_c2w[index][0]
             pts = torch.tensor([])
@@ -88,12 +85,9 @@ class NeuSSystem(BaseSystem):
             elif self.dataset.directions.ndim == 4:  # (N, H, W, 3)
                 directions = self.dataset.directions[index][0]
             rays_o, rays_d = get_rays(directions, c2w)
-            rgb = (
-                self.dataset.all_images[index]
-                .view(-1, self.dataset.all_images.shape[-1])
-                .to(self.device)
+            rgb = self.dataset.all_images[index].view(
+                -1, self.dataset.all_images.shape[-1]
             )
-            fg_mask = self.dataset.all_fg_masks[index].view(-1).to(self.device)
 
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
@@ -108,16 +102,11 @@ class NeuSSystem(BaseSystem):
             self.model.background_color = torch.ones((3,), dtype=torch.float32)
 
         self.model.background_color = self.model.background_color.to(self.device)
-        if self.dataset.apply_mask:
-            rgb = rgb * fg_mask[..., None] + self.model.background_color * (
-                1 - fg_mask[..., None]
-            )
 
         batch.update(
             {
                 "rays": rays,
                 "rgb": rgb,
-                "fg_mask": fg_mask,
                 "pts": pts,
                 "pts_normal": pts_normal,
                 "pts_weights": pts_weights,
@@ -161,13 +150,6 @@ class NeuSSystem(BaseSystem):
         loss += loss_eikonal * self.C(self.config.system.loss.lambda_eikonal)
 
         opacity = torch.clamp(out["opacity"].squeeze(-1), 1.0e-3, 1.0 - 1.0e-3)
-        loss_mask = binary_cross_entropy(opacity, batch["fg_mask"].float())
-        self.add_scalar("train/loss_mask", loss_mask)
-        loss += loss_mask * (
-            self.C(self.config.system.loss.lambda_mask)
-            if self.dataset.has_mask
-            else 0.0
-        )
 
         loss_opaque = binary_cross_entropy(opacity, opacity)
         self.add_scalar("train/loss_opaque", loss_opaque)
