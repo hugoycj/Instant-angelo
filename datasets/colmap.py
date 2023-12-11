@@ -237,16 +237,16 @@ def error_to_confidence(error):
     return confidence
 
 
-class ColmapDatasetBase:
+class ColmapDataset(Dataset):
     # the data only has to be processed once
     initialized = False
     properties = {}
 
-    def setup(self, config, split):
+    def __init__(self, config, split):
         self.config = config
         self.split = split
 
-        if not ColmapDatasetBase.initialized:
+        if not ColmapDataset.initialized:
             camdata = read_cameras_binary(
                 os.path.join(self.config.root_dir, "sparse/0/cameras.bin")
             )
@@ -365,7 +365,7 @@ class ColmapDatasetBase:
                 pts3d_normal=pts3d_normal,
             )
 
-            ColmapDatasetBase.properties = {
+            ColmapDataset.properties = {
                 "w": w,
                 "h": h,
                 "img_wh": img_wh,
@@ -378,9 +378,9 @@ class ColmapDatasetBase:
                 "all_images": all_images,
             }
 
-            ColmapDatasetBase.initialized = True
+            ColmapDataset.initialized = True
 
-        for k, v in ColmapDatasetBase.properties.items():
+        for k, v in ColmapDataset.properties.items():
             setattr(self, k, v)
 
         if self.split == "test":
@@ -421,25 +421,17 @@ class ColmapDatasetBase:
         occ_mask = min_dist < radius
         return occ_mask
 
-
-class ColmapDataset(Dataset, ColmapDatasetBase):
-    def __init__(self, config, split):
-        self.setup(config, split)
-
     def __len__(self):
-        return len(self.all_images)
+        if self.split == "train":
+            return 99999999
+        else:
+            return len(self.all_images)
 
     def __getitem__(self, index):
-        return {"index": index}
-
-
-class ColmapIterableDataset(IterableDataset, ColmapDatasetBase):
-    def __init__(self, config, split):
-        self.setup(config, split)
-
-    def __iter__(self):
-        while True:
-            yield {}
+        if self.split == "train":
+            return {"index": index}
+        else:
+            return {}
 
 
 @datasets.register("colmap")
@@ -453,16 +445,11 @@ class ColmapDataModule:
         if device is None:
             device = self.device
         if stage in [None, "train"]:
-            self.train_dataset = ColmapIterableDataset(self.config, "train")
+            self.train_dataset = ColmapDataset(self.config, "train")
             self.train_dataset.to_device(device)
         if stage in [None, "test"]:
-            self.test_dataset = ColmapDataset(
-                self.config, self.config.get("test_split", "test")
-            )
+            self.test_dataset = ColmapDataset(self.config, "test")
             self.test_dataset.to_device(device)
-
-    def prepare_data(self):
-        pass
 
     def general_loader(self, dataset, batch_size):
         return DataLoader(
