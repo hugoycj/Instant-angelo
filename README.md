@@ -103,24 +103,29 @@ bash run_neuralangelo-colmap_dense.sh  ${INPUT_DIR}
 </details>
 
 ### \[Experimental\] Run Reflective Surface Reconstruction in 30 Minutes
+https://github.com/hugoycj/Instant-angelo/assets/40767265/8ff8687c-35f6-4744-b09c-62665546c27c
+
 <details>
 <summary>[Click to expand]</summary>
-
+    
 **Information you need to know before you start**:
 
    * We implement several key techniques from [UniSDF](https://fangjinhuawang.github.io/UniSDF/) including: 1. Camera and Reflected Radiance Compositions; 2. Coarse-to-fine training strategy However, we currently do not implement contraction and proposal sampling. Instead, we use NeRF++ for background modeling and occupancy grids for sampling acceleration.
-   * Due to GPU resource constraints, we do not implement the exact same parameters and training regimen as the UniSDF paper, which uses 8 V100s for 3 hours of training. Instant-angelo is optimized for customer-level GPUs like RTX 3090 and 4090, with a training target of under 30 minutes. Specifically, our modifications include:
+   * Due to GPU resource constraints, we do not implement the exact same parameters and training regimen as the UniSDF paper, which uses 8 V100s for 3 hours of training. In the future, we aim to continue experimenting with UniSDF to push reconstruction quality and efficiency. But for now, we have some adaptations allow UniSDF-enhanced performance on readily available GPU hardware with reasonable training times. Specifically, our modifications include:
       - Reduced MLP dimension from 256 to 64
       - Only 2 layers for the radiance MLPs 
       - 16 level NGP grid with 2 channels per level (vs 4 channels)
-
-   In the future, we aim to continue experimenting with UniSDF to push reconstruction quality and efficiency. But for now, these adaptations allow UniSDF-enhanced performance on readily available GPU hardware with reasonable training times.
-
+   * TODO List:
+       - [ ] Contraction
+       - [ ] Proposal Sampling
+       - [ ] Preprocessed dataset links
+       - [ ] Other regulazations in UniSDF
+ 
 ---
 
 Now it is time to start by running:
 ```
-bash run_neuralangelo-colmap_dense.sh  ${INPUT_DIR}
+bash run_neuralangelo-colmap_sparse_reflection.sh  ${INPUT_DIR}
 ```
 </details>
 
