@@ -1,5 +1,11 @@
 # Instant-angelo: Build high-fidelity Digital Twin within 20 Minutes!
 ![](assets/demo.gif)
+
+## News (2023.12.22)
+We are excited to announce that we have added a reimplementation of [UniSDF](https://fangjinhuawang.github.io/UniSDF/) to our project! UniSDF is a general purpose differentiable renderer proposed in the UniSDF paper that achieves state-of-the-art results on 3D reconstruction for reflection objects. 
+
+Please check out the [reflection](#reflection) mode to experience the improvements firsthand! In reflection mode, UniSDF demonstrates its ability to reconstruct reflective surfaces. We believe this addition will push Instant-angelo to new heights in rapid photorealistic neural 3D reconstructions. Further experiments and improvements on leveraging UniSDF will be conducted later.
+
 ## Introduction
 Neuralangelo facilitates high-fidelity 3D surface reconstruction from RGB video captures. It enables the creation of digital replicas of both small-scale objects and large real-world scenes, derived from common mobile devices. These digital replicas, or 'twins', are represented with an exceptional level of three-dimensional geo-detail.
 
@@ -96,6 +102,28 @@ bash run_neuralangelo-colmap_dense.sh  ${INPUT_DIR}
 ```
 </details>
 
+### \[Experimental\] Run Reflective Surface Reconstruction in 30 Minutes
+<details>
+<summary>[Click to expand]</summary>
+
+**Information you need to know before you start**:
+
+   * We implement several key techniques from [UniSDF](https://fangjinhuawang.github.io/UniSDF/) including: 1. Camera and Reflected Radiance Compositions; 2. Coarse-to-fine training strategy However, we currently do not implement contraction and proposal sampling. Instead, we use NeRF++ for background modeling and occupancy grids for sampling acceleration.
+   * Due to GPU resource constraints, we do not implement the exact same parameters and training regimen as the UniSDF paper, which uses 8 V100s for 3 hours of training. Instant-angelo is optimized for customer-level GPUs like RTX 3090 and 4090, with a training target of under 30 minutes. Specifically, our modifications include:
+      - Reduced MLP dimension from 256 to 64
+      - Only 2 layers for the radiance MLPs 
+      - 16 level NGP grid with 2 channels per level (vs 4 channels)
+
+   In the future, we aim to continue experimenting with UniSDF to push reconstruction quality and efficiency. But for now, these adaptations allow UniSDF-enhanced performance on readily available GPU hardware with reasonable training times.
+
+---
+
+Now it is time to start by running:
+```
+bash run_neuralangelo-colmap_dense.sh  ${INPUT_DIR}
+```
+</details>
+
 ## Frequently asked questions (FAQ)
 <details>
 <summary>[Click to expand]</summary>
@@ -130,6 +158,7 @@ bash run_neuralangelo-colmap_dense.sh  ${INPUT_DIR}
 - [torch-bakedsdf](https://github.com/hugoycj/torch-bakedsdf): Unofficial pytorch implementation of *BakedSDF:Meshing Neural SDFs for Real-Time View Synthesis*
 
 ## Acknocklement
+* Thanks to Fangjinhua Wang for his great work [UniSDF](https://fangjinhuawang.github.io/UniSDF/) on improving the reflective surface reconstruction
 * Thanks to bennyguo for his excellent pipeline [instant-nsr-pl](https://github.com/bennyguo/instant-nsr-pl)
 * Thanks to RaduAlexandru for his implementation of improved curvature loss in [permuto_sdf](https://github.com/RaduAlexandru/permuto_sdf)
 * Thanks to Alex Yu for his implementation of spherical harmonics in [svox2](https://github.com/sxyu/svox2/tree/master)

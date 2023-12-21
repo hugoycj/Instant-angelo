@@ -110,6 +110,44 @@ class VolumeDualColorV2(nn.Module):
     def regularizations(self, out):
         return {}
 
+@models.register('volume-dual-colorV3')
+class VolumeDualColorV3(nn.Module):
+    def __init__(self, config):
+        super(VolumeDualColorV3, self).__init__()
+        self.config = config
+        self.n_dir_dims = self.config.get('n_dir_dims', 3)
+        self.n_output_dims = 3
+
+        self.encoding = get_encoding(self.n_dir_dims, self.config.dir_encoding_config)
+        self.n_input_dims = self.config.input_feature_dim + self.encoding.n_output_dims
+        self.cam_network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)
+        self.ref_network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)
+        self.weight_network = get_mlp(self.config.input_feature_dim, 1, self.config.weitht_network_config)
+        
+    def forward(self, features, viewdirs, normals):
+        dirs = (viewdirs + 1.) / 2. # (-1, 1) => (0, 1)
+        dirs_embd = self.encoding(dirs.view(-1, self.n_dir_dims))
+        
+        VdotN = (-viewdirs * normals).sum(-1, keepdim=True)
+        refdirs = 2 * VdotN * normals + viewdirs
+        refdirs = (refdirs + 1.) / 2. # (-1, 1) => (0, 1)
+        refdirs_embd = self.encoding(refdirs.view(-1, self.n_dir_dims))
+
+        network_inp = torch.cat([features.view(-1, features.shape[-1]), normals.view(-1, normals.shape[-1])], dim=-1)
+        ref_weight = self.weight_network(network_inp)
+
+        cam_network_inp = torch.cat([network_inp, dirs_embd], dim=-1)
+        ref_network_inp = torch.cat([network_inp, refdirs_embd], dim=-1)
+        cam_color = self.cam_network(cam_network_inp).view(*features.shape[:-1], self.n_output_dims).float()
+        ref_color = self.ref_network(ref_network_inp).view(*features.shape[:-1], self.n_output_dims).float()
+
+        color = ref_weight * get_activation(self.config.color_activation)(ref_color) + \
+                (1-ref_weight) * get_activation(self.config.color_activation)(cam_color)
+        return color
+
+    def regularizations(self, out):
+        return {}
+
 @models.register('volume-color')
 class VolumeColor(nn.Module):
     def __init__(self, config):
