@@ -4,6 +4,10 @@
 ## News (2023.12.22)
 We are excited to announce that we have added a reimplementation of [UniSDF](https://fangjinhuawang.github.io/UniSDF/) to our project! UniSDF is a general purpose differentiable renderer proposed in the UniSDF paper that achieves state-of-the-art results on 3D reconstruction for reflection objects. 
 
+
+https://github.com/hugoycj/Instant-angelo/assets/40767265/e374fcfe-de37-459e-97d9-8a0c49380d06
+
+
 Please check out the [reflection](#reflection) mode to experience the improvements firsthand! In reflection mode, UniSDF demonstrates its ability to reconstruct reflective surfaces. We believe this addition will push Instant-angelo to new heights in rapid photorealistic neural 3D reconstructions. Further experiments and improvements on leveraging UniSDF will be conducted later.
 
 ## Introduction
