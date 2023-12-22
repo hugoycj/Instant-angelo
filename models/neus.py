@@ -235,10 +235,10 @@ class NeuSModel(BaseModel):
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
         depth = accumulate_along_rays(weights, ray_indices, values=midpoints, n_rays=n_rays)
         comp_rgb = accumulate_along_rays(weights, ray_indices, values=rgb, n_rays=n_rays)
-
+        rays_fg = opacity > 0.1
         comp_normal = accumulate_along_rays(weights, ray_indices, values=normal, n_rays=n_rays)
         comp_normal = F.normalize(comp_normal, p=2, dim=-1)
-
+        comp_normal[~rays_fg[:, 0]] = 0
         out = {
             'comp_rgb': comp_rgb,
             'comp_normal': comp_normal,

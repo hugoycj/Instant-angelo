@@ -64,7 +64,7 @@ model:
       weight_norm: true
   texture:
     name: volume-dual-color
-    input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
+    input_feature_dim: ${add:${model.geometry.feature_dim}, 6} # surface coordinates and normal as additional input
     diffuse_warmup_steps: 5000 
     dir_encoding_config:
       otype: SphericalHarmonics

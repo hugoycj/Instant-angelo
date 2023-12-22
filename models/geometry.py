@@ -205,6 +205,7 @@ class VolumeSDF(BaseImplicitGeometry):
                 
                 out = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims).float()
                 sdf, feature = out[...,0], out
+                feature = torch.concat([feature, (points * 2 - 1)], dim=-1)
                 if 'sdf_activation' in self.config:
                     sdf = get_activation(self.config.sdf_activation)(sdf + float(self.config.sdf_bias))
                 if 'feature_activation' in self.config:

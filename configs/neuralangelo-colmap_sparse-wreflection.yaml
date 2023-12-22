@@ -8,7 +8,7 @@ dataset:
   img_downscale: 4 # specify training image size by either img_wh or img_downscale
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
-  n_test_traj_steps: 6
+  n_test_traj_steps: 30
   apply_mask: false
   load_data_on_gpu: false
   dense_pcd_path: null
@@ -64,7 +64,7 @@ model:
       weight_norm: true
   texture:
     name: volume-dual-colorV3
-    input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
+    input_feature_dim: ${add:${model.geometry.feature_dim},6} # surface coordinates and normal as additional input
     diffuse_warmup_steps: 5000 
     dir_encoding_config:
       otype: SphericalHarmonics
