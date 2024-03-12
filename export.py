@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--exp_dir', required=True)
     parser.add_argument('--flip', action='store_true')
     parser.add_argument('--color', action='store_true')
+    parser.add_argument('--align', action='store_true')
     parser.add_argument('--res', default=1024)
     parser.add_argument('--output-dir', default='results')
     args, extras = parser.parse_known_args()
@@ -55,31 +56,34 @@ def main():
     logging.info(f"Creating system: {config.system.name}")
     system = systems.make(config.system.name, config, load_from_checkpoint=latest_ckpt)
     system.model.cuda()
-    mesh = system.model.export(config.export)
+    mesh_properties = system.model.export(config.export)
     
-    mesh['v_pos'] = mesh['v_pos'][:, [0, 2, 1]].numpy()
-    if args.flip:
-        mesh['t_pos_idx'] = mesh['t_pos_idx'].numpy()[:, [0, 2, 1]]
-    else:
-        mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
     
     if config.export.export_vertex_color:
         mesh = trimesh.Trimesh(
-                vertices=mesh['v_pos'],
-                faces=mesh['t_pos_idx'],
-                vertex_colors=mesh['v_rgb'].numpy(),
-                vertex_normals=mesh['v_norm'].numpy()
+                vertices=mesh_properties['v_pos'],
+                faces=mesh_properties['t_pos_idx'],
+                vertex_colors=mesh_properties['v_rgb'].numpy(),
+                vertex_normals=mesh_properties['v_norm'].numpy()
             )
     else:
         mesh = trimesh.Trimesh(
-                vertices=mesh['v_pos'],
-                faces=mesh['t_pos_idx'],
+                vertices=mesh_properties['v_pos'],
+                faces=mesh_properties['t_pos_idx'],
             )
     mesh.visual.material = trimesh.visual.material.PBRMaterial(
         metallicFactor=0.25,
         roughnessFactor=0.25
     )
     
+    if args.align:
+        import datasets
+        dm = datasets.make(config.dataset.name, config.dataset)
+        dm.setup('predict')
+        inv_scale = dm.predict_dataset.inv_scale.numpy()
+        mesh.vertices = mesh.vertices * inv_scale
+        mesh.apply_transform(dm.predict_dataset.inv_trans.inverse())
+    mesh.faces = np.fliplr(mesh.faces)
     os.makedirs(args.output_dir, exist_ok=True)
     logging.info("Exporting mesh.")
     mesh.export(os.path.join(args.output_dir, f'{config.name}.glb'))

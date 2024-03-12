@@ -112,8 +112,8 @@ def normalize_poses(poses, pts, up_est_method, center_est_method, pts3d_normal=N
         if pts3d_normal is not None:
             pts3d_normal = (R @ pts3d_normal.T).T
         pts = pts / scale
-
-    return poses_norm, pts, pts3d_normal
+        inv_scale = scale
+    return poses_norm, pts, pts3d_normal, inv_trans, inv_scale
 
 def create_spheric_poses(cameras, n_steps=120):
     center = torch.as_tensor([0.,0.,0.], dtype=cameras.dtype, device=cameras.device)
@@ -268,7 +268,7 @@ class ColmapDatasetBase():
 
             pts3d = torch.from_numpy(pts3d).float()
             pts3d_confidence = torch.from_numpy(pts3d_confidence).float()
-            all_c2w, pts3d, pts3d_normal = normalize_poses(all_c2w, pts3d, up_est_method=self.config.up_est_method, center_est_method=self.config.center_est_method, pts3d_normal=pts3d_normal)
+            all_c2w, pts3d, pts3d_normal, inv_trans, inv_scale = normalize_poses(all_c2w, pts3d, up_est_method=self.config.up_est_method, center_est_method=self.config.center_est_method, pts3d_normal=pts3d_normal)
 
             ColmapDatasetBase.properties = {
                 'w': w,
@@ -285,7 +285,9 @@ class ColmapDatasetBase():
                 'all_images': all_images,
                 'all_fg_masks': all_fg_masks,
                 'all_fg_indexs': all_fg_indexs,
-                'all_bg_indexs': all_bg_indexs
+                'all_bg_indexs': all_bg_indexs,
+                'inv_trans': inv_trans,
+                "inv_scale": inv_scale
             }
 
             ColmapDatasetBase.initialized = True
