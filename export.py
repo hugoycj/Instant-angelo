@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--gpu', default='0', help='GPU(s) to be used')
     parser.add_argument('--exp_dir', required=True)
     parser.add_argument('--flip', action='store_true')
+    parser.add_argument('--color', action='store_true')
     parser.add_argument('--res', default=1024)
     parser.add_argument('--output-dir', default='results')
     args, extras = parser.parse_known_args()
@@ -45,7 +46,7 @@ def main():
     if  config.model.geometry.xyz_encoding_config.otype == 'ProgressiveBandHashGrid':
         config.model.geometry.xyz_encoding_config.start_level = config.model.geometry.xyz_encoding_config.n_levels
     config.model.geometry.isosurface.resolution = args.res
-    config.export.export_vertex_color = True
+    config.export.export_vertex_color = args.color
     config.cmd_args = vars(args)
     
     if 'seed' not in config:
@@ -62,12 +63,18 @@ def main():
     else:
         mesh['t_pos_idx'] = np.fliplr(mesh['t_pos_idx'].numpy())[:, [0, 2, 1]]
     
-    mesh = trimesh.Trimesh(
-            vertices=mesh['v_pos'],
-            faces=mesh['t_pos_idx'],
-            vertex_colors=mesh['v_rgb'].numpy(),
-            vertex_normals=mesh['v_norm'].numpy()
-        )
+    if config.export.export_vertex_color:
+        mesh = trimesh.Trimesh(
+                vertices=mesh['v_pos'],
+                faces=mesh['t_pos_idx'],
+                vertex_colors=mesh['v_rgb'].numpy(),
+                vertex_normals=mesh['v_norm'].numpy()
+            )
+    else:
+        mesh = trimesh.Trimesh(
+                vertices=mesh['v_pos'],
+                faces=mesh['t_pos_idx'],
+            )
     mesh.visual.material = trimesh.visual.material.PBRMaterial(
         metallicFactor=0.25,
         roughnessFactor=0.25
