@@ -58,7 +58,6 @@ def main():
     system.model.cuda()
     mesh_properties = system.model.export(config.export)
     
-    
     if config.export.export_vertex_color:
         mesh = trimesh.Trimesh(
                 vertices=mesh_properties['v_pos'],
@@ -79,15 +78,16 @@ def main():
     if args.align:
         import datasets
         dm = datasets.make(config.dataset.name, config.dataset)
-        dm.setup('predict')
-        inv_scale = dm.predict_dataset.inv_scale.numpy()
+        dm.setup('fit')
+        inv_scale = dm.train_dataset.inv_scale.numpy()
         mesh.vertices = mesh.vertices * inv_scale
-        mesh.apply_transform(dm.predict_dataset.inv_trans.inverse())
+        mesh.apply_transform(dm.train_dataset.inv_trans.inverse())
     mesh.faces = np.fliplr(mesh.faces)
     os.makedirs(args.output_dir, exist_ok=True)
     logging.info("Exporting mesh.")
     mesh.export(os.path.join(args.output_dir, f'{config.name}.glb'))
     mesh.export(os.path.join(args.output_dir, f'{config.name}.obj'))
+    mesh.export(os.path.join(args.output_dir, f'{config.name}.ply'))
     logging.info("Export finished successfully.")
     
 if __name__ == '__main__':

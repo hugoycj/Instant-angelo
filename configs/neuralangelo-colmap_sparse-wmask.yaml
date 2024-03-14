@@ -6,7 +6,7 @@ dataset:
   name: colmap
   root_dir: ???
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
-  up_est_method: ground # if true, use estimated ground plane normal direction as up direction
+  up_est_method: camera # if true, use estimated ground plane normal direction as up direction
   center_est_method: point
   n_test_traj_steps: 30
   apply_mask: true
