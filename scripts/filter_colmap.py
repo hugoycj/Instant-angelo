@@ -189,7 +189,7 @@ def main(data, output_dir, matching_method):
     if os.path.exists(f'{target}/database.db'):
         os.remove(f'{target}/database.db')
         
-    feature_extractor_command = f'{colmap_bin} feature_extractor --database_path {target}/database.db --image_path {source}/masked_image > {target}/log.txt'
+    feature_extractor_command = f'{colmap_bin} feature_extractor --database_path {target}/database.db --image_path {masked_image_dir} > {target}/log.txt'
     feature_extraction_time, feature_extraction_return_code = run_command(feature_extractor_command, "Running feature_extractor...")
 
     if matching_method == 'vocab_tree_matcher':
