@@ -213,7 +213,7 @@ class SaverMixin():
         if v_rgb is not None:
             v_rgb = self.convert_data(v_rgb)
         if v_norm is not None:
-            v_norm = self.convert_data(v_rgb)
+            v_norm = self.convert_data(v_norm)
         import trimesh
         mesh = trimesh.Trimesh(
             vertices=v_pos,
